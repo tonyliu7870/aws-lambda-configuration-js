@@ -1,0 +1,43 @@
+{
+  "name": "aws-lambda-configuration-js",
+  "version": "0.0.1",
+  "description": "A Javascript(Typescript) library for AWS Lambda Functions to get configurations. Must be used together with aws-lambda-configuration-core",
+  "main": "dist/index.js",
+  "author": "Tony Liu <gonstl7870@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jasmine": "^2.8.2",
+    "@types/node": "^8.0.53",
+    "apidoc": "^0.17.6",
+    "aws-sdk": "^2.153.0",
+    "jasmine": "^2.8.0",
+    "nyc": "^11.3.0",
+    "ts-node": "^3.3.0",
+    "typescript": "^2.6.1"
+  },
+  "scripts": {
+    "build": "rm -r dist/ && tsc -p tsconfig.json",
+    "doc": "apidoc -f .ts -i src/ -o docs/",
+    "test": "nyc jasmine"
+  },
+  "nyc": {
+    "reporter": [
+      "html",
+      "lcov",
+      "text",
+      "text-summary"
+    ],
+    "require": [
+      "ts-node/register"
+    ],
+    "extension": [
+      ".ts"
+    ],
+    "include": [
+      "src/**/*.ts"
+    ]
+  },
+  "apidoc": {
+    "title": "AWS Lambda Configuration - js"
+  }
+}
