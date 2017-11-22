@@ -1,9 +1,10 @@
 {
   "name": "aws-lambda-configuration-js",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A Javascript(Typescript) library for AWS Lambda Functions to get configurations. Must be used together with aws-lambda-configuration-core",
   "main": "dist/index.js",
   "author": "Tony Liu <gonstl7870@gmail.com>",
+  "repository": "https://github.com/tonyliu7870/aws-lambda-configuration-js.git",
   "license": "MIT",
   "devDependencies": {
     "@types/jasmine": "^2.8.2",
