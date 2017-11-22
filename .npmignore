@@ -61,3 +61,8 @@ typings/
 src/
 spec/
 docs/
+
+# non library related file
+README.md
+tsconfig.json
+tslint.json
