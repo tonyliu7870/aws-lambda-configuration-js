@@ -7,6 +7,26 @@ export default class {
   private tableName = 'lambda-configurations';
   private documentName = 'settings';
 
+  /**
+   * @api constructor(options) constructor
+   * @apiName constrcutor
+   * @apiVersion 0.0.2
+   * @apiGroup Initialization
+   * @apiDescription Initialization
+   *
+   * @apiParam {Options} [options] The options to this get configuration request
+   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
+   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName=settings] The document name to access the configurations
+   *
+   * @apiParamExample {void} construction(js)
+   *     const Config = require('aws-lambda-configuration-js').default;
+   *     const config1 = new Config();
+   *
+   * @apiParamExample {void} construction(ts)
+   *     import Config from 'aws-lambda-configuration-js';
+   *     const config1 = new Config();
+   */
   constructor (options: Partial<Options> = {}) {
     if (options.functionName) this.functionName = options.functionName;
     if (options.tableName) this.tableName = options.tableName;
@@ -29,16 +49,10 @@ export default class {
    * @apiParam {Boolean} [options.noCache] Does the core return/save cached for the configuration
    *
    * @apiParamExample {String} get-single-config(js/promise)
-   *     const Config = require('aws-lambda-configuration-js');
-   *     const config1 = new Config();
-   *
    *     config1.get('version').then((serverVerison) => {
    *       console.log(serverVerison);
    *     });
    * @apiParamExample {json} get-whole-config(ts/async-await)
-   *     import Config from 'aws-lambda-configuration-js';
-   *     const config1 = new Config();
-   *
    *     type ConfigModel = {
    *       version: string;
    *       ...
