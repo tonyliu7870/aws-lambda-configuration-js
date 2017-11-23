@@ -5,4 +5,5 @@ var UpdateType;
     UpdateType["get"] = "GET";
     UpdateType["put"] = "PUT";
     UpdateType["delete"] = "DELETE";
+    UpdateType["check"] = "CHECK";
 })(UpdateType = exports.UpdateType || (exports.UpdateType = {}));

@@ -1,5 +1,5 @@
 import Configuration from './index';
-import { GetConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam } from './types';
+import { GetConfigurationRequestParam, CheckConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam } from './types';
 import { Lambda } from 'aws-sdk';
 
 type SampleConfig = {
@@ -83,6 +83,25 @@ describe('aws-lambda-configuration-js library', () => {
       const sampleConfig = await config.getFresh<string>('sampleConfigB');
       expect(sampleConfig).toBe('sampleValueB');
     });
+  });
+
+  describe('has config', async () => {
+    it('should check if the config exists', async () => {
+      config.lambda = <any>{
+        invoke: (params: Lambda.InvocationRequest) => {
+          expect(params.FunctionName).toBe('lambda-configuration');
+          const payload: CheckConfigurationRequestParam = JSON.parse(<string> params.Payload);
+          expect(payload.tableName).toBe('lambda-configurations');
+          expect(payload.documentName).toBe('settings');
+          expect(payload.key).toBe('sampleConfig');
+          expect(payload.type).toBe('CHECK');
+          const result = false;
+          return { promise: () => Promise.resolve({ StatusCode: 200, Payload: JSON.stringify(result) }) };
+        }
+      };
+      const sampleConfig = await config.has('sampleConfig');
+      expect(sampleConfig).toBe(false);
+    })
   });
 
   describe('set config', async () => {

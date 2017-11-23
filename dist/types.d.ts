@@ -13,6 +13,7 @@ export declare type ConfigurationRequestParam = {
 export declare type GetConfigurationRequestParam = ConfigurationRequestParam & {
     noCache: boolean;
 };
+export declare type CheckConfigurationRequestParam = ConfigurationRequestParam & {};
 export declare type SetConfigurationRequestParam = ConfigurationRequestParam & {
     data: any;
 };
@@ -21,4 +22,5 @@ export declare enum UpdateType {
     get = "GET",
     put = "PUT",
     delete = "DELETE",
+    check = "CHECK",
 }

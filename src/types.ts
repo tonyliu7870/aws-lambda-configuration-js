@@ -16,16 +16,17 @@ export type GetConfigurationRequestParam = ConfigurationRequestParam & {
   noCache: boolean;
 }
 
+export type CheckConfigurationRequestParam = ConfigurationRequestParam & {}
+
 export type SetConfigurationRequestParam = ConfigurationRequestParam & {
   data: any;
 }
 
-export type DeleteConfigurationRequestParam = ConfigurationRequestParam & {
-
-}
+export type DeleteConfigurationRequestParam = ConfigurationRequestParam & {}
 
 export enum UpdateType {
   get = 'GET',
   put = 'PUT',
   delete = 'DELETE',
+  check = 'CHECK',
 }

@@ -1,5 +1,5 @@
 import { Lambda } from 'aws-sdk';
-import { Options, UpdateType, GetConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam } from './types';
+import { Options, UpdateType, GetConfigurationRequestParam, CheckConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam } from './types';
 
 export default class {
   public lambda = new Lambda();
@@ -45,7 +45,7 @@ export default class {
    *       ...
    *       ...
    *     }
-   *     const myConfig = config1.get<ConfigModel>();
+   *     const myConfig = await config1.get<ConfigModel>();
    *     console.log(myConfig.version);
    */
   async get<T> (key?: string, options: Partial<Options> = {}): Promise<T> {
@@ -86,13 +86,76 @@ export default class {
    *       ...
    *       ...
    *     }
-   *     const myConfig = config1.getFresh<ConfigModel>();
+   *     const myConfig = await config1.getFresh<ConfigModel>();
    *     console.log(myConfig.version);
    */
   async getFresh<T> (key?: string, options: Partial<Options> = {}): Promise<T> {
     return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
   }
 
+  /**
+   * @api has(key,options) has
+   * @apiName has-config
+   * @apiVersion 0.0.1
+   * @apiGroup Get Configuration
+   * @apiDescription Check if the configuration exists by invoking core lambda function. It is useful to save data transmission between lambdas when you only want to check if it contains a property.
+   *
+   * @apiParam {String} [key] The sub-path to your configuration. Leave undefined will check if the document exist
+   * @apiParam {Options} [options] The options to this check configuration request
+   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
+   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName=settings] The document name to check the configurations
+   *
+   * @apiParamExample {String} has-single-config(js/promise)
+   *     config1.has('version').then((isExist) => {
+   *       console.log(isExist);  //true
+   *     });
+   * @apiParamExample {json} has-whole-document(ts/async-await)
+   *     const isExist = await config1.has(undefined, { documentName: 'tempDocument' });
+   *     console.log(isExist); //true
+   */
+  async has (key?: string, options: Partial<Options> = {}): Promise<boolean> {
+    const response = await this.lambda.invoke({
+      FunctionName: options.functionName || this.functionName,
+      Payload: JSON.stringify(<CheckConfigurationRequestParam>{
+        type: UpdateType.check,
+        tableName: options.tableName || this.tableName,
+        documentName: options.documentName || this.documentName,
+        key,
+      }),
+    }).promise();
+    return JSON.parse(<string> response.Payload) as boolean;
+  }
+
+  /**
+   * @api set(data,key,options) set
+   * @apiName set-config
+   * @apiVersion 0.0.1
+   * @apiGroup Set Configuration
+   * @apiDescription Set the configuration/Create a new Document by invoking core lambda function
+   *
+   * @apiParam {any} data The configuration to store. If key is undefined, this should be an object (unless you really want to store one config per one document). This could happen if you decided to encrypt the whole config document.
+   * @apiParam {String} [key] The sub-path to your configuration. Leave undefined will create/replace the whole configuration document
+   * @apiParam {Options} [options] The options to this set configuration request
+   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
+   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName=settings] The document name to set the configurations
+   *
+   * @apiParamExample {String} set-single-config(js/promise)
+   *     const data = 'HI, This is my secret';
+   *     config1.set(data, 'additionField').then(() => {
+   *       console.log('done');
+   *     });
+   * @apiParamExample {json} create-new-config(ts/async-await)
+   *     type ConfigModel = {
+   *       a: string;
+   *       c: number;
+   *       d: boolean;
+   *       ...
+   *     }
+   *     const data: ConfigModel = { a: 'b', c: 1, d: true, f: ['i', 'jk'] };
+   *     await config1.set(data, , { documentName: 'my2ndConfiguration' });
+   */
   async set (data: any, key?: string, options: Partial<Options> = {}): Promise<void> {
     await this.lambda.invoke({
       FunctionName: options.functionName || this.functionName,
