@@ -429,7 +429,7 @@ export default class {
 
     // decrypt data
     let decryptor = new AES.ModeOfOperation.ctr([...dataKey], new AES.Counter(0)); // convert Buffer data key to BytesArray
-    const plainText = AES.utils.utf8.fromBytes(decryptor.decrypt([...(data.cipher)]));  // convert Buffer cipher text to BytesArray
+    const plainText = AES.utils.utf8.fromBytes(decryptor.decrypt(AES.utils.hex.toBytes(data.cipher)));  // convert Buffer cipher text to BytesArray
 
     // clean up key's data immediately after usage
     dataKey = null as any;
