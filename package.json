@@ -1,6 +1,6 @@
 {
   "name": "aws-lambda-configuration-js",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A Javascript(Typescript) library for AWS Lambda Functions to get configurations. Must be used together with aws-lambda-configuration-core",
   "main": "dist/index.js",
   "author": "Tony Liu <gonstl7870@gmail.com>",
@@ -40,5 +40,8 @@
   },
   "apidoc": {
     "title": "AWS Lambda Configuration - js"
+  },
+  "dependencies": {
+    "aes-js": "^3.1.0"
   }
 }

@@ -30,3 +30,8 @@ export enum UpdateType {
   delete = 'DELETE',
   check = 'CHECK',
 }
+
+export type KEKCipher = {
+  cipher: Buffer;
+  encryptedKey: Buffer;
+}

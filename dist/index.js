@@ -9,6 +9,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const aws_sdk_1 = require("aws-sdk");
+// aes-js missing declaration file
+const AES = require('aes-js');
 const types_1 = require("./types");
 class default_1 {
     /**
@@ -23,16 +25,23 @@ class default_1 {
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName=settings] The document name to access the configurations
      *
-     * @apiParamExample {void} construction(js)
+     * @apiParamExample {js} construction(js)
      *     const Config = require('aws-lambda-configuration-js').default;
      *     const config1 = new Config();
-     *
-     * @apiParamExample {void} construction(ts)
+     * @apiParamExample {js} construction(ts)
      *     import Config from 'aws-lambda-configuration-js';
      *     const config1 = new Config();
+     * @apiParamExample {js} with-options
+     *     import Config from 'aws-lambda-configuration-js';
+     *     const config1 = new Config({
+     *       functionName: 'my-lambda',
+     *       tableName: 'my-table',
+     *       documentName: 'my-configuration'
+     *     })
      */
     constructor(options = {}) {
         this.lambda = new aws_sdk_1.Lambda();
+        this.kms = new aws_sdk_1.KMS();
         this.functionName = 'lambda-configuration';
         this.tableName = 'lambda-configurations';
         this.documentName = 'settings';
@@ -58,11 +67,11 @@ class default_1 {
      * @apiParam {String} [options.documentName=settings] The document name to get the configurations
      * @apiParam {Boolean} [options.noCache] Does the core return/save cached for the configuration
      *
-     * @apiParamExample {String} get-single-config(js/promise)
+     * @apiParamExample {js} get-single-config(js/promise)
      *     config1.get('version').then((serverVerison) => {
      *       console.log(serverVerison);
      *     });
-     * @apiParamExample {json} get-whole-config(ts/async-await)
+     * @apiParamExample {js} get-whole-config(ts/async-await)
      *     type ConfigModel = {
      *       version: string;
      *       ...
@@ -71,6 +80,19 @@ class default_1 {
      *     }
      *     const myConfig = await config1.get<ConfigModel>();
      *     console.log(myConfig.version);
+     *
+     * @apiSuccess {Type} . The config you stored.
+     * @apiSuccessExample {String} with-key
+     *     "user001"
+     * @apiSuccessExample {json} without-key
+     *     {
+     *       "userId": "user001",
+     *       "password_group": {
+     *         "cipher": Buffer<XX XX XX ...>,
+     *         "encryptedKey": Buffer<YY YY YY ...>
+     *       },
+     *       "something": ["else", true, 1234]
+     *     }
      */
     get(key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -94,17 +116,11 @@ class default_1 {
      * @apiGroup Get Configuration
      * @apiDescription Same as get-config but just help you set the noCache to true. Get the fresh, non-cached configuration by invoking core lambda function
      *
-     * @apiParamExample {String} get-single-config(js/promise)
-     *     const Config = require('aws-lambda-configuration-js');
-     *     const config1 = new Config();
-     *
+     * @apiParamExample {js} get-single-config(js/promise)
      *     config1.getFresh('version').then(serverVerison => {
      *       console.log(serverVerison);
      *     });
-     * @apiParamExample {json} get-whole-config(ts/async-await)
-     *     import Config from 'aws-lambda-configuration-js';
-     *     const config1 = new Config();
-     *
+     * @apiParamExample {js} get-whole-config(ts/async-await)
      *     type ConfigModel = {
      *       version: string;
      *       ...
@@ -113,6 +129,19 @@ class default_1 {
      *     }
      *     const myConfig = await config1.getFresh<ConfigModel>();
      *     console.log(myConfig.version);
+     *
+     * @apiSuccess {Type} . The config you stored.
+     * @apiSuccessExample {String} with-key
+     *     "user001"
+     * @apiSuccessExample {json} without-key
+     *     {
+     *       "userId": "user001",
+     *       "password_group": {
+     *         "cipher": Buffer<XX XX XX ...>,
+     *         "encryptedKey": Buffer<YY YY YY ...>
+     *       },
+     *       "something": ["else", true, 1234]
+     *     }
      */
     getFresh(key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -134,11 +163,13 @@ class default_1 {
      *
      * @apiParamExample {String} has-single-config(js/promise)
      *     config1.has('version').then((isExist) => {
-     *       console.log(isExist);  //true
+     *       console.log(isExist);  // true
      *     });
      * @apiParamExample {json} has-whole-document(ts/async-await)
      *     const isExist = await config1.has(undefined, { documentName: 'tempDocument' });
-     *     console.log(isExist); //true
+     *     console.log(isExist); // true
+     *
+     * @apiSuccess {boolean} . Does the configuration contains the document / the document contains the path
      */
     has(key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -168,12 +199,12 @@ class default_1 {
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName=settings] The document name to set the configurations
      *
-     * @apiParamExample {String} set-single-config(js/promise)
+     * @apiParamExample {js} set-single-config(js/promise)
      *     const data = 'HI, This is my secret';
      *     config1.set(data, 'additionField').then(() => {
      *       console.log('done');
      *     });
-     * @apiParamExample {json} create-new-config(ts/async-await)
+     * @apiParamExample {js} create-new-config(ts/async-await)
      *     type ConfigModel = {
      *       a: string;
      *       c: number;
@@ -181,7 +212,7 @@ class default_1 {
      *       ...
      *     }
      *     const data: ConfigModel = { a: 'b', c: 1, d: true, f: ['i', 'jk'] };
-     *     await config1.set(data, , { documentName: 'my2ndConfiguration' });
+     *     await config1.set(data, undefined, { documentName: 'my2ndConfiguration' });
      */
     set(data, key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -210,11 +241,11 @@ class default_1 {
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName=settings] The document name to delete the configuration
      *
-     * @apiParamExample {String} delete-single-config(js/promise)
+     * @apiParamExample {js} delete-single-config(js/promise)
      *     config1.delete('version').then(() => {
      *       console.log('done');
      *     });
-     * @apiParamExample {json} delete-single-config(ts/async-await)
+     * @apiParamExample {js} delete-single-config(ts/async-await)
      *     await config1.delete('version');
      */
     delete(key, options = {}) {
@@ -242,11 +273,11 @@ class default_1 {
      * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      *
-     * @apiParamExample {String} delete-whole-config(js/promise)
+     * @apiParamExample {js} delete-whole-config(js/promise)
      *     config1.deleteDocument('version').then(() => {
      *       console.log('done');
      *     });
-     * @apiParamExample {json} delete-whole-config(ts/async-await)
+     * @apiParamExample {js} delete-whole-config(ts/async-await)
      *     await config1.deleteDocument('version');
      */
     deleteDocument(documentName, options = {}) {
@@ -259,6 +290,172 @@ class default_1 {
                     documentName: documentName,
                 }),
             }).promise();
+        });
+    }
+    /**
+     * @api encrypt(data,cmk) encrypt
+     * @apiName encrypt-config
+     * @apiVersion 1.1.0
+     * @apiGroup En/Decryption
+     * @apiDescription Encrypt the data directly though AWS KMS. This function should only be used to encrypt data itself is random, e.g. access token, access secret, etc. If you want to encrypt more predict able data, e.g. user password. Use encryptKEK instead.
+     *
+     * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
+     * @apiParam {String} [cmk=alias/lambda-configuration-key] The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
+     * @apiParamExample {js} encrypt-data(js/promise)
+     *     config1.encrypt({ jwtToken: 'abcde12345' }).then((cipher) => {
+     *       console.log(cipher);  // Buffer<00 02 ff ....>
+     *     });
+     * @apiParamExample {js} encrypt-data(ts/async-await)
+     *     const cipher = await config1.encrypt({ jwtToken: 'abcde12345' });
+     *     console.log(cipher);  // Buffer<00 02 ff ....>
+     *
+     * @apiSuccess {Buffer} . A buffer contains the encrypted data.
+     * @apiSuccessExample {Buffer}
+     *     Buffer <00 01 02 03 04 05 06 ...>
+     */
+    encrypt(data, cmk = 'alias/lambda-configuration-key') {
+        return __awaiter(this, void 0, void 0, function* () {
+            const response = yield this.kms.encrypt({
+                KeyId: cmk,
+                Plaintext: JSON.stringify(data),
+            }).promise().catch(error => {
+                if (error.code === 'NotFoundException') {
+                    console.error(`Can not encrypt the data using key: ${cmk}.
+          Please check if the key is available in ${aws_sdk_1.config.region} or the lambda executor has the corresponding access right.
+          If the key you passed is a alias name, it should look like "alias/my-key"`);
+                }
+                throw error;
+            });
+            return response.CiphertextBlob;
+        });
+    }
+    /**
+     * @api decrypt(data) decrypt
+     * @apiName decrypt-config
+     * @apiVersion 1.1.0
+     * @apiGroup En/Decryption
+     * @apiDescription Decrypt the data directly though AWS KMS
+     *
+     * @apiParam {Buffer} The encrypted cipher generated by encrypt()
+     * @apiParamExample {js} decrypt(js/promise)
+     *     config1.get().then(myConfig => {
+     *       return config1.decrypt(myConfig.jwtToken);
+     *     }).then(jwtToken => {
+     *       console.log(jwtToken);  // "abcde12345"
+     *     });
+     * @apiParamExample {js} decrypt(ts/async-await)
+     *     const myConfig = await config1.get();
+     *     const jwtToken = config1.decrypt(myConfig.jwtToken);
+     *     console.log(jwtToken);  // "abcde12345"
+     *
+     * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encrypt()
+     */
+    decrypt(data) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const response = yield this.kms.decrypt({ CiphertextBlob: data }).promise();
+            return JSON.parse(response.Plaintext);
+        });
+    }
+    /**
+     * @api encryptKEK(data,cmk) encryptKEK
+     * @apiName encrypt-KEK-data
+     * @apiVersion 1.1.0
+     * @apiGroup En/Decryption
+     * @apiDescription Encrypt the data by Key-encryption-key (KEK). This function will encrypt your data by a new random key which is encrypted by your AWS cmk. If the data itself is random, non-predictable, non-structural, non-repeat, you MAY use encrypt() for simplicity.
+     *
+     * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
+     * @apiParam {String} [cmk=alias/lambda-configuration-key] The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
+     * @apiParamExample {js} encryptKEK(js/promise)
+     *     config1.encryptKEK({ password: '123456', second_password: 'qwerty' })
+     *       .then(result => {
+     *         console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+     *         return config1.set(result, 'password_group', { documentName: 'user001' });
+     *       })
+     *       .then(() => console.log('change password success'));
+     * @apiParamExample {js} encryptKEK(ts/async-promise)
+     *     const result = await config1.encryptKEK({ password: '123456', second_password: 'qwerty' });
+     *     console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+     *     await config1.set(result, 'password_group', { documentName: 'user001' });
+     *     console.log('change password success');
+     *
+     * @apiSuccess {Buffer} cipher A buffer contains the encrypted data
+     * @apiSuccess {Buffer} encryptedKey A buffer contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
+     * @apiSuccessExample {json}
+     *     {
+     *       "cipher": Buffer<XX XX XX ...>,
+     *       "encryptedKey": Buffer<YY YY YY ...>
+     *     }
+     */
+    encryptKEK(data, cmk = 'alias/lambda-configuration-key') {
+        return __awaiter(this, void 0, void 0, function* () {
+            let plainTextBytesArray = AES.utils.utf8.toBytes(JSON.stringify(data)); // convert arbitrarily data type payload to BytesArray
+            let dataKey = yield this.kms.generateDataKey({
+                KeyId: cmk,
+                KeySpec: 'AES_256',
+            }).promise().catch(error => {
+                if (error.code === 'NotFoundException') {
+                    console.error(`Can not generate a random data key under your aws key: ${cmk}.
+          Please check if the key is available in ${aws_sdk_1.config.region} or the lambda executor has the corresponding access right.
+          If the key you passed is a alias name, it should look like "alias/my-key"`);
+                }
+                throw error;
+            });
+            ;
+            // encrypt data
+            let encryptor = new AES.ModeOfOperation.ctr([...dataKey.Plaintext], new AES.Counter(0)); // convert Buffer data key to BytesArray
+            const cipher = new Buffer(encryptor.encrypt(plainTextBytesArray));
+            const result = {
+                cipher,
+                encryptedKey: dataKey.CiphertextBlob,
+            };
+            // clean up key's data immediately after usage
+            encryptor = null;
+            plainTextBytesArray = null;
+            dataKey = null;
+            try {
+                global.gc();
+            }
+            catch (e) { }
+            return result;
+        });
+    }
+    /**
+     * @api decryptKEK(data) decryptKEK
+     * @apiName decrypt-KEK-data
+     * @apiVersion 1.1.0
+     * @apiGroup En/Decryption
+     * @apiDescription Decrypt the data by Key-encryption-key (KEK). This function will decrypt your data by your data key which is encrypted by your AWS cmk.
+     *
+     * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
+     * @apiParamExample {json} decryptKEK(js/promise)
+     *     config1.get('password_group', { documentName: 'user001' })
+     *       .then(result => {
+     *         console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+     *         return config1.decryptKEK(result);
+     *       })
+     *       .then(passwordGroup => console.log(passwordGroup));  // { password: '123456', second_password: 'qwerty' }
+     * @apiParamExample {json} decryptKEK(ts/async-promise)
+     *     const result = await config1.get<KEKCipher>('password_group', { documentName: 'user001' });
+     *     console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+     *     const passwordGroup = await config1.decryptKEK({ password: '123456', second_password: 'qwerty' });
+     *     console.log(passwordGroup);  // { password: '123456', second_password: 'qwerty' }
+     *
+     * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
+     */
+    decryptKEK(data) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let dataKey = (yield this.kms.decrypt({ CiphertextBlob: data.encryptedKey }).promise()).Plaintext;
+            // decrypt data
+            let decryptor = new AES.ModeOfOperation.ctr([...dataKey], new AES.Counter(0)); // convert Buffer data key to BytesArray
+            const plainText = AES.utils.utf8.fromBytes(decryptor.decrypt([...(data.cipher)])); // convert Buffer cipher text to BytesArray
+            // clean up key's data immediately after usage
+            dataKey = null;
+            decryptor = null;
+            try {
+                global.gc();
+            }
+            catch (e) { }
+            return JSON.parse(plainText);
         });
     }
 }
