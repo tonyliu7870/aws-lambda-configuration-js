@@ -298,7 +298,7 @@ export default class {
    * @apiSuccessExample {Buffer}
    *     Buffer <00 01 02 03 04 05 06 ...>
    */
-  async encrypt (data: any, cmk: string = 'alias/lambda-configuration-key'): Promise<Buffer> {
+  async encrypt (data: any, cmk: string = 'alias/lambda-configuration-key'): Promise<String> {
     const response = await this.kms.encrypt({
       KeyId: cmk,
       Plaintext: JSON.stringify(data),
@@ -310,7 +310,7 @@ export default class {
       }
       throw error;
     });
-    return response.CiphertextBlob as Buffer;
+    return (response.CiphertextBlob as Buffer).toString('base64');
   }
 
   /**
@@ -334,8 +334,8 @@ export default class {
    *
    * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encrypt()
    */
-  async decrypt<T> (data: Buffer): Promise<T> {
-    const response = await this.kms.decrypt({ CiphertextBlob: data }).promise();
+  async decrypt<T> (data: string): Promise<T> {
+    const response = await this.kms.decrypt({ CiphertextBlob: new Buffer(data, 'base64') }).promise();
     return JSON.parse(response.Plaintext as string) as T;
   }
 
@@ -385,10 +385,11 @@ export default class {
 
     // encrypt data
     let encryptor = new AES.ModeOfOperation.ctr([...(dataKey.Plaintext as Buffer)], new AES.Counter(0));  // convert Buffer data key to BytesArray
-    const cipher = new Buffer(encryptor.encrypt(plainTextBytesArray));
+    //const cipher = new Buffer(encryptor.encrypt(plainTextBytesArray));
+    const cipher = AES.utils.hex.fromBytes(encryptor.encrypt(plainTextBytesArray));
     const result: KEKCipher = {
-      cipher,
-      encryptedKey: dataKey.CiphertextBlob as Buffer,
+      cipher: cipher,
+      encryptedKey: (dataKey.CiphertextBlob as Buffer).toString('base64'),
     };
 
     // clean up key's data immediately after usage
@@ -424,7 +425,7 @@ export default class {
    * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
    */
   async decryptKEK<T> (data: KEKCipher): Promise<T> {
-    let dataKey = (await this.kms.decrypt({ CiphertextBlob: data.encryptedKey }).promise()).Plaintext as Buffer;
+    let dataKey = (await this.kms.decrypt({ CiphertextBlob: new Buffer(data.encryptedKey, 'base64') }).promise()).Plaintext as Buffer;
 
     // decrypt data
     let decryptor = new AES.ModeOfOperation.ctr([...dataKey], new AES.Counter(0)); // convert Buffer data key to BytesArray

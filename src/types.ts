@@ -32,6 +32,6 @@ export enum UpdateType {
 }
 
 export type KEKCipher = {
-  cipher: Buffer;
-  encryptedKey: Buffer;
+  cipher: string;
+  encryptedKey: string;
 }

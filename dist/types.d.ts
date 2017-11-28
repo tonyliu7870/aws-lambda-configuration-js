@@ -1,4 +1,3 @@
-/// <reference types="node" />
 export declare type Options = {
     functionName: string;
     tableName: string;
@@ -26,6 +25,6 @@ export declare enum UpdateType {
     check = "CHECK",
 }
 export declare type KEKCipher = {
-    cipher: Buffer;
-    encryptedKey: Buffer;
+    cipher: string;
+    encryptedKey: string;
 };
