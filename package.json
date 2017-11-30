@@ -8,6 +8,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/jasmine": "^2.8.2",
+    "@types/lodash.get": "^4.4.3",
     "@types/node": "^8.0.53",
     "apidoc": "^0.17.6",
     "aws-sdk": "^2.153.0",
@@ -15,6 +16,10 @@
     "nyc": "^11.3.0",
     "ts-node": "^3.3.0",
     "typescript": "^2.6.1"
+  },
+  "dependencies": {
+    "aes-js": "^3.1.0",
+    "lodash.get": "^4.4.2"
   },
   "scripts": {
     "build": "rm -r dist/ && tsc -p tsconfig.json",
@@ -40,8 +45,5 @@
   },
   "apidoc": {
     "title": "AWS Lambda Configuration - js"
-  },
-  "dependencies": {
-    "aes-js": "^3.1.0"
   }
 }

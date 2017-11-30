@@ -1,11 +1,13 @@
-import { Lambda, KMS } from 'aws-sdk';
+import { Lambda, KMS, DynamoDB } from 'aws-sdk';
 import { Options, KEKCipher } from './types';
 export default class  {
     lambda: Lambda;
     kms: KMS;
+    dynamo: DynamoDB.DocumentClient;
     private functionName;
     private tableName;
     private documentName;
+    private cmk;
     /**
      * @api constructor(options) constructor
      * @apiName constrcutor
@@ -17,6 +19,7 @@ export default class  {
      * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName=settings] The document name to access the configurations
+     * @apiParam {String} [options.cmk] Customer Master Key (CMK). The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
      *
      * @apiParamExample {js} construction(js)
      *     const Config = require('aws-lambda-configuration-js').default;
@@ -110,7 +113,7 @@ export default class  {
      *       "something": ["else", true, 1234]
      *     }
      */
-    getFresh<T>(key?: string, options?: Partial<Options>): Promise<T>;
+    getDirect<T>(key?: string, options?: Partial<Options>): Promise<T | undefined>;
     /**
      * @api has(key,options) has
      * @apiName has-config
@@ -135,6 +138,7 @@ export default class  {
      * @apiSuccess {boolean} . Does the configuration contains the document / the document contains the path
      */
     has(key?: string, options?: Partial<Options>): Promise<boolean>;
+    hasDocument(options?: Partial<Options>): Promise<boolean>;
     /**
      * @api set(data,key,options) set
      * @apiName set-config

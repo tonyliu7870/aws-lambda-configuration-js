@@ -11,6 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const aws_sdk_1 = require("aws-sdk");
 // aes-js missing declaration file
 const AES = require('aes-js');
+const _get = require("lodash.get");
 const types_1 = require("./types");
 class default_1 {
     /**
@@ -24,6 +25,7 @@ class default_1 {
      * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName=settings] The document name to access the configurations
+     * @apiParam {String} [options.cmk] Customer Master Key (CMK). The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
      *
      * @apiParamExample {js} construction(js)
      *     const Config = require('aws-lambda-configuration-js').default;
@@ -42,15 +44,19 @@ class default_1 {
     constructor(options = {}) {
         this.lambda = new aws_sdk_1.Lambda();
         this.kms = new aws_sdk_1.KMS();
+        this.dynamo = new aws_sdk_1.DynamoDB.DocumentClient();
         this.functionName = 'lambda-configuration';
         this.tableName = 'lambda-configurations';
         this.documentName = 'settings';
+        this.cmk = 'alias/lambda-configuration-key';
         if (options.functionName)
             this.functionName = options.functionName;
         if (options.tableName)
             this.tableName = options.tableName;
         if (options.documentName)
             this.documentName = options.documentName;
+        if (options.cmk)
+            this.cmk = options.cmk;
     }
     /**
      * @api get<T>(key,options) get
@@ -143,9 +149,23 @@ class default_1 {
      *       "something": ["else", true, 1234]
      *     }
      */
-    getFresh(key, options = {}) {
+    getDirect(key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.get(key, Object.assign({}, options, { noCache: true }));
+            //return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
+            const documentName = options.documentName || this.documentName;
+            const response = yield this.dynamo.get({
+                TableName: options.tableName || this.tableName,
+                Key: { configName: documentName },
+                ProjectionExpression: '#data',
+                ExpressionAttributeNames: { '#data': 'data' },
+            }).promise();
+            if (response.Item === undefined) {
+                throw new types_1.DocumentNotFound(`Request resource ${documentName} not found`);
+            }
+            if (key === undefined) {
+                return response.Item.data;
+            }
+            return _get(response.Item.data, key);
         });
     }
     /**
@@ -183,6 +203,11 @@ class default_1 {
                 }),
             }).promise();
             return JSON.parse(response.Payload);
+        });
+    }
+    hasDocument(options = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield this.has(undefined, options);
         });
     }
     /**
@@ -448,7 +473,7 @@ class default_1 {
             let dataKey = (yield this.kms.decrypt({ CiphertextBlob: new Buffer(data.encryptedKey, 'base64') }).promise()).Plaintext;
             // decrypt data
             let decryptor = new AES.ModeOfOperation.ctr([...dataKey], new AES.Counter(0)); // convert Buffer data key to BytesArray
-            const plainText = AES.utils.utf8.fromBytes(decryptor.decrypt([...(data.cipher)])); // convert Buffer cipher text to BytesArray
+            const plainText = AES.utils.utf8.fromBytes(decryptor.decrypt(AES.utils.hex.toBytes(data.cipher))); // convert Buffer cipher text to BytesArray
             // clean up key's data immediately after usage
             dataKey = null;
             decryptor = null;

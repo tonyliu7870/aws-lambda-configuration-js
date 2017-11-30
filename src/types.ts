@@ -3,8 +3,22 @@ export type Options = {
   tableName: string;
   documentName: string;
   noCache: boolean;
+  cmk: string;
 }
 
+export class DocumentNotFound extends Error {
+  constructor (message?: string) {
+    super(message);
+    this.name = 'DocumentNotFound';
+  }
+}
+
+export type KEKCipher = {
+  cipher: string;
+  encryptedKey: string;
+}
+
+// Core functions types
 export type ConfigurationRequestParam = {
   tableName: string;
   documentName: string;
@@ -31,7 +45,3 @@ export enum UpdateType {
   check = 'CHECK',
 }
 
-export type KEKCipher = {
-  cipher: string;
-  encryptedKey: string;
-}

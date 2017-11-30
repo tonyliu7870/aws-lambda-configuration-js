@@ -3,6 +3,14 @@ export declare type Options = {
     tableName: string;
     documentName: string;
     noCache: boolean;
+    cmk: string;
+};
+export declare class DocumentNotFound extends Error {
+    constructor(message?: string);
+}
+export declare type KEKCipher = {
+    cipher: string;
+    encryptedKey: string;
 };
 export declare type ConfigurationRequestParam = {
     tableName: string;
@@ -24,7 +32,3 @@ export declare enum UpdateType {
     delete = "DELETE",
     check = "CHECK",
 }
-export declare type KEKCipher = {
-    cipher: string;
-    encryptedKey: string;
-};

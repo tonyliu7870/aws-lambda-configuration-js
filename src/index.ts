@@ -1,15 +1,18 @@
-import { Lambda, KMS, config as AWSConfig } from 'aws-sdk';
+import { Lambda, KMS, config as AWSConfig, DynamoDB } from 'aws-sdk';
 // aes-js missing declaration file
 const AES = require('aes-js');
-import { Options, UpdateType, GetConfigurationRequestParam, CheckConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam, KEKCipher } from './types';
+import _get = require('lodash.get');
+import { Options, UpdateType, DocumentNotFound, GetConfigurationRequestParam, CheckConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam, KEKCipher } from './types';
 
 export default class {
   public lambda = new Lambda();
   public kms = new KMS();
+  public dynamo = new DynamoDB.DocumentClient();
 
   private functionName = 'lambda-configuration';
   private tableName = 'lambda-configurations';
   private documentName = 'settings';
+  private cmk = 'alias/lambda-configuration-key';
 
   /**
    * @api constructor(options) constructor
@@ -22,6 +25,7 @@ export default class {
    * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
    * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
    * @apiParam {String} [options.documentName=settings] The document name to access the configurations
+   * @apiParam {String} [options.cmk] Customer Master Key (CMK). The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
    *
    * @apiParamExample {js} construction(js)
    *     const Config = require('aws-lambda-configuration-js').default;
@@ -41,6 +45,7 @@ export default class {
     if (options.functionName) this.functionName = options.functionName;
     if (options.tableName) this.tableName = options.tableName;
     if (options.documentName) this.documentName = options.documentName;
+    if (options.cmk) this.cmk = options.cmk;
   }
 
   /**
@@ -133,8 +138,22 @@ export default class {
    *       "something": ["else", true, 1234]
    *     }
    */
-  async getFresh<T> (key?: string, options: Partial<Options> = {}): Promise<T> {
-    return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
+  async getDirect<T> (key?: string, options: Partial<Options> = {}): Promise<T | undefined> {
+    //return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
+    const documentName = options.documentName || this.documentName;
+    const response = await this.dynamo.get({
+      TableName: options.tableName || this.tableName,
+      Key: { configName: documentName },
+      ProjectionExpression: '#data',
+      ExpressionAttributeNames: { '#data': 'data' },
+    }).promise();
+    if (response.Item === undefined) {
+      throw new DocumentNotFound(`Request resource ${documentName} not found`);
+    }
+    if (key === undefined) {
+      return response.Item.data as T;
+    }
+    return _get(response.Item.data, key) as T;
   }
 
   /**
@@ -171,6 +190,10 @@ export default class {
       }),
     }).promise();
     return JSON.parse(<string> response.Payload) as boolean;
+  }
+
+  async hasDocument (options: Partial<Options> = {}): Promise<boolean> {
+    return await this.has(undefined, options);
   }
 
   /**
