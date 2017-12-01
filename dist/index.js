@@ -152,20 +152,28 @@ class default_1 {
     getDirect(key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
             //return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
+            // transform key into path array
+            const paths = Array.isArray(key) ? ['data', ...key] : (key === undefined) ? ['data'] : ('data.' + key).split('.');
+            // prepare request parameter
+            const tableName = options.tableName || this.tableName;
             const documentName = options.documentName || this.documentName;
+            const projectionExpression = `${paths.map((subPath, index) => '#path' + index).join('.')}`;
+            const projectionKeys = {};
+            paths.forEach((subPath, index) => projectionKeys['#path' + index] = subPath);
             const response = yield this.dynamo.get({
-                TableName: options.tableName || this.tableName,
+                TableName: tableName,
                 Key: { configName: documentName },
-                ProjectionExpression: '#data',
-                ExpressionAttributeNames: { '#data': 'data' },
+                ProjectionExpression: projectionExpression,
+                ExpressionAttributeNames: projectionKeys,
             }).promise();
+            // decide return type
             if (response.Item === undefined) {
                 throw new types_1.DocumentNotFound(`Request resource ${documentName} not found`);
             }
             if (key === undefined) {
                 return response.Item.data;
             }
-            return _get(response.Item.data, key);
+            return _get(response.Item, paths.map(path => path.replace(/\[\d+\]/g, '[0]')));
         });
     }
     /**
@@ -205,9 +213,35 @@ class default_1 {
             return JSON.parse(response.Payload);
         });
     }
+    hasDirect(key, options = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (key === undefined) {
+                return yield this.hasDocumentDirect(key, options);
+            }
+            try {
+                return ((yield this.getDirect(key, options)) !== undefined);
+            }
+            catch (error) {
+                if (error instanceof types_1.DocumentNotFound) {
+                    return false;
+                }
+                throw error;
+            }
+        });
+    }
     hasDocument(options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
             return yield this.has(undefined, options);
+        });
+    }
+    hasDocumentDirect(documentName, options = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const result = yield this.dynamo.get({
+                TableName: options.tableName || this.tableName,
+                Key: { configName: options.documentName || this.documentName },
+                ProjectionExpression: 'configName',
+            }).promise();
+            return result.Item !== undefined;
         });
     }
     /**
@@ -253,6 +287,33 @@ class default_1 {
             }).promise();
         });
     }
+    setDirect(data, key, options = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const tableName = options.tableName || this.tableName;
+            const documentName = options.documentName || this.documentName;
+            if (key === undefined) {
+                // create/replace document
+                yield this.dynamo.put({
+                    TableName: tableName,
+                    Item: { configName: documentName, data },
+                }).promise();
+            }
+            else {
+                // update partial key in existing document
+                const paths = ('data.' + key).split('.');
+                const updateExpression = `SET ${paths.map((subPath, index) => '#path' + index).join('.')} = :data`;
+                const updateKeys = {};
+                paths.forEach((subPath, index) => updateKeys['#path' + index] = subPath);
+                yield this.dynamo.update({
+                    TableName: tableName,
+                    Key: { configName: documentName },
+                    UpdateExpression: updateExpression,
+                    ExpressionAttributeNames: updateKeys,
+                    ExpressionAttributeValues: { ':data': data },
+                }).promise();
+            }
+        });
+    }
     /**
      * @api delete(key,options) delete
      * @apiName delete-config
@@ -286,6 +347,20 @@ class default_1 {
             }).promise();
         });
     }
+    deleteDirect(key, options = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const paths = ('data.' + key).split('.');
+            const updateExpression = `REMOVE ${paths.map((subPath, index) => '#path' + index).join('.')}`;
+            const updateKeys = {};
+            paths.forEach((subPath, index) => updateKeys['#path' + index] = subPath);
+            yield this.dynamo.update({
+                TableName: options.tableName || this.tableName,
+                Key: { configName: options.documentName || this.documentName },
+                UpdateExpression: updateExpression,
+                ExpressionAttributeNames: updateKeys,
+            }).promise();
+        });
+    }
     /**
      * @api deleteDocument(documentName,options) deleteDocument
      * @apiName delete-whole-config
@@ -314,6 +389,14 @@ class default_1 {
                     tableName: options.tableName || this.tableName,
                     documentName: documentName,
                 }),
+            }).promise();
+        });
+    }
+    deleteDocumentDirect(documentName, options = {}) {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.dynamo.delete({
+                TableName: options.tableName || this.tableName,
+                Key: { configName: documentName },
             }).promise();
         });
     }

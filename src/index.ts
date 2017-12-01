@@ -138,22 +138,34 @@ export default class {
    *       "something": ["else", true, 1234]
    *     }
    */
-  async getDirect<T> (key?: string, options: Partial<Options> = {}): Promise<T | undefined> {
+  async getDirect<T> (key?: string | string[], options: Partial<Options> = {}): Promise<T | undefined> {
     //return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
+
+    // transform key into path array
+    const paths = Array.isArray(key) ? ['data', ...key] : (key === undefined) ? ['data'] : ('data.' + key).split('.');
+
+    // prepare request parameter
+    const tableName = options.tableName || this.tableName;
     const documentName = options.documentName || this.documentName;
+    const projectionExpression = `${paths.map((subPath, index) => '#path' + index).join('.')}`;
+    const projectionKeys: Record<string, string> = {};
+    paths.forEach((subPath, index) => projectionKeys['#path' + index] = subPath);
+
     const response = await this.dynamo.get({
-      TableName: options.tableName || this.tableName,
+      TableName: tableName,
       Key: { configName: documentName },
-      ProjectionExpression: '#data',
-      ExpressionAttributeNames: { '#data': 'data' },
+      ProjectionExpression: projectionExpression,
+      ExpressionAttributeNames: projectionKeys,
     }).promise();
+
+    // decide return type
     if (response.Item === undefined) {
       throw new DocumentNotFound(`Request resource ${documentName} not found`);
     }
     if (key === undefined) {
       return response.Item.data as T;
     }
-    return _get(response.Item.data, key) as T;
+    return _get(response.Item, paths.map(path => path.replace(/\[\d+\]/g, '[0]'))) as T;
   }
 
   /**
@@ -192,8 +204,32 @@ export default class {
     return JSON.parse(<string> response.Payload) as boolean;
   }
 
+  async hasDirect (key?: string | string[], options: Partial<Options> = {}): Promise<boolean> {
+    if (key === undefined) {
+      return await this.hasDocumentDirect(key, options);
+    }
+    try {
+      return (await this.getDirect(key, options) !== undefined);
+    } catch (error) {
+      if (error instanceof DocumentNotFound) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async hasDocument (options: Partial<Options> = {}): Promise<boolean> {
     return await this.has(undefined, options);
+  }
+
+  async hasDocumentDirect (documentName?: string, options: Partial<Options> = {}): Promise<boolean> {
+    const result = await this.dynamo.get({
+      TableName: options.tableName || this.tableName,
+      Key: { configName: options.documentName || this.documentName },
+      ProjectionExpression: 'configName',
+    }).promise();
+
+    return result.Item !== undefined;
   }
 
   /**
@@ -238,6 +274,31 @@ export default class {
     }).promise();
   }
 
+  async setDirect (data: any, key?: string, options: Partial<Options> = {}): Promise<void> {
+    const tableName = options.tableName || this.tableName;
+    const documentName = options.documentName || this.documentName;
+    if (key === undefined) {
+      // create/replace document
+      await this.dynamo.put({
+        TableName: tableName,
+        Item: { configName: documentName, data },
+      }).promise();
+    } else {
+      // update partial key in existing document
+      const paths = ('data.' + key).split('.');
+      const updateExpression = `SET ${paths.map((subPath, index) => '#path' + index).join('.')} = :data`;
+      const updateKeys: Record<string, string> = {};
+      paths.forEach((subPath, index) => updateKeys['#path' + index] = subPath);
+      await this.dynamo.update({
+        TableName: tableName,
+        Key: { configName: documentName },
+        UpdateExpression: updateExpression,
+        ExpressionAttributeNames: updateKeys,
+        ExpressionAttributeValues: { ':data': data },
+      }).promise();
+    }
+  }
+
   /**
    * @api delete(key,options) delete
    * @apiName delete-config
@@ -270,6 +331,20 @@ export default class {
     }).promise();
   }
 
+  async deleteDirect (key: string, options: Partial<Options> = {}): Promise<void> {
+    const paths = ('data.' + key).split('.');
+    const updateExpression = `REMOVE ${paths.map((subPath, index) => '#path' + index).join('.')}`;
+    const updateKeys: Record<string, string> = {};
+    paths.forEach((subPath, index) => updateKeys['#path' + index] = subPath);
+
+    await this.dynamo.update({
+      TableName: options.tableName || this.tableName,
+      Key: { configName: options.documentName || this.documentName },
+      UpdateExpression: updateExpression,
+      ExpressionAttributeNames: updateKeys,
+    }).promise();
+  }
+
   /**
    * @api deleteDocument(documentName,options) deleteDocument
    * @apiName delete-whole-config
@@ -297,6 +372,13 @@ export default class {
         tableName: options.tableName || this.tableName,
         documentName: documentName,
       }),
+    }).promise();
+  }
+
+  async deleteDocumentDirect (documentName: string, options: Partial<Options> = {}): Promise<void> {
+    await this.dynamo.delete({
+      TableName: options.tableName || this.tableName,
+      Key: { configName: documentName },
     }).promise();
   }
 

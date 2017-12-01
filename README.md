@@ -6,13 +6,13 @@ Deployed the core: [aws-lambda-configuration-core](https://github.com/tonyliu787
 ## Permission Required  
 Your lambda execution role will require the following permissions:  
 Core-related functions: (get(), set(), has(), delete(), deleteDocument())  
-lambda:InvokeFunction  
+- `lambda:InvokeFunction`  
   
 Direct functions:  (getDirect(), setDirect(), hasDirect(), deleteDirect(), deleteDocumentDirect())  
-dynamodb:GetItem  
-dynamodb:PutItem  
-dynamodb:UpdateItem  
-dynamodb:DeleteItem  
+- `dynamodb:GetItem`  
+- `dynamodb:PutItem`  
+- `dynamodb:UpdateItem`  
+- `dynamodb:DeleteItem`  
   
 Encryption functions:  (encrypt(), decrypt(), encryptKEK(), decryptKEK())  
 According to AWS, you should add your lambda execution role into the key policy's "Key Users".  

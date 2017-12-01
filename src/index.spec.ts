@@ -57,33 +57,84 @@ describe('aws-lambda-configuration-js library', () => {
       expect(sampleConfig.key2).toBe(true);
       expect(sampleConfig.key3).toBe(123);
     });
-  });
 
-  describe('get fresh config & defualt options', async () => {
-    it('should use the set options to get fresh config', async () => {
-      config = new Configuration({
-        tableName: 'tableB',
-        documentName: 'documentB',
-        functionName: 'lambdaB',
+    it('should get config from dynamoDB (whole document)', async () => {
+      spyOn(config.dynamo, 'get').and.callFake((params: AWS.DynamoDB.DocumentClient.GetItemInput) => {
+        expect(params.TableName).toBe('lambda-configurations');
+        expect(params.Key).toEqual(jasmine.objectContaining({ configName: 'settings' }));
+        expect(params.ProjectionExpression).toBe('#path0');
+        expect(params.ExpressionAttributeNames).toEqual(<any> jasmine.objectContaining({ '#path0': 'data' }));
+        const result = { data: { hello: 'world' } };
+        return { promise: () => Promise.resolve({ Item: result }) };
       });
 
-      config.lambda = <any>{
-        invoke: (params: Lambda.InvocationRequest) => {
-          expect(params.FunctionName).toBe('lambdaB');
-          const payload: GetConfigurationRequestParam = JSON.parse(<string> params.Payload);
-          expect(payload.tableName).toBe('tableB');
-          expect(payload.documentName).toBe('documentB');
-          expect(payload.key).toBe('sampleConfigB');
-          expect(payload.noCache).toBe(true);
-          expect(payload.type).toBe('GET');
-          const result = 'sampleValueB';
-          return { promise: () => Promise.resolve({ StatusCode: 200, Payload: JSON.stringify(result) }) };
-        }
-      };
-      const sampleConfig = await config.getFresh<string>('sampleConfigB');
-      expect(sampleConfig).toBe('sampleValueB');
+      const result = await config.getDirect<object>();
+      expect(result).toEqual(<any> jasmine.objectContaining({ hello: 'world' }));
+    });
+
+    it('should get config from dynamoDB (string key)', async () => {
+      spyOn(config.dynamo, 'get').and.callFake((params: AWS.DynamoDB.DocumentClient.GetItemInput) => {
+        expect(params.TableName).toBe('lambda-configurations');
+        expect(params.Key).toEqual(jasmine.objectContaining({ configName: 'settings' }));
+        expect(params.ProjectionExpression).toBe('#path0.#path1.#path2');
+        expect(params.ExpressionAttributeNames).toEqual(<any> jasmine.objectContaining({
+          '#path0': 'data',
+          '#path1': 'key1',
+          '#path2': 'key2'
+        }));
+        const result = { data: { key1: { key2: 'hello world' } } };
+        return { promise: () => Promise.resolve({ Item: result }) };
+      });
+
+      const result = await config.getDirect<string>('key1.key2');
+      expect(result).toBe('hello world');
+    });
+
+    it('should get config from dynamoDB (array key)', async () => {
+      spyOn(config.dynamo, 'get').and.callFake((params: AWS.DynamoDB.DocumentClient.GetItemInput) => {
+        expect(params.TableName).toBe('lambda-configurations');
+        expect(params.Key).toEqual(jasmine.objectContaining({ configName: 'settings' }));
+        expect(params.ProjectionExpression).toBe('#path0.#path1.#path2.#path3');
+        expect(params.ExpressionAttributeNames).toEqual(<any> jasmine.objectContaining({
+          '#path0': 'data',
+          '#path1': 'key1',
+          '#path2': 'key2a.key2b',
+          '#path3': 'key3'
+        }));
+        const result = {data:{key1:{'key2a.key2b':{key3:'hello world'}}}};
+        return { promise: () => Promise.resolve({ Item: result }) };
+      });
+
+      const result = await config.getDirect<string>(['key1', 'key2a.key2b', 'key3']);
+      expect(result).toBe('hello world');
     });
   });
+
+  // describe('get fresh config & defualt options', async () => {
+  //   it('should use the set options to get fresh config', async () => {
+  //     config = new Configuration({
+  //       tableName: 'tableB',
+  //       documentName: 'documentB',
+  //       functionName: 'lambdaB',
+  //     });
+
+  //     config.lambda = <any>{
+  //       invoke: (params: Lambda.InvocationRequest) => {
+  //         expect(params.FunctionName).toBe('lambdaB');
+  //         const payload: GetConfigurationRequestParam = JSON.parse(<string> params.Payload);
+  //         expect(payload.tableName).toBe('tableB');
+  //         expect(payload.documentName).toBe('documentB');
+  //         expect(payload.key).toBe('sampleConfigB');
+  //         expect(payload.noCache).toBe(true);
+  //         expect(payload.type).toBe('GET');
+  //         const result = 'sampleValueB';
+  //         return { promise: () => Promise.resolve({ StatusCode: 200, Payload: JSON.stringify(result) }) };
+  //       }
+  //     };
+  //     const sampleConfig = await config.getFresh<string>('sampleConfigB');
+  //     expect(sampleConfig).toBe('sampleValueB');
+  //   });
+  // });
 
   describe('has config', async () => {
     it('should check if the config exists', async () => {
@@ -101,7 +152,36 @@ describe('aws-lambda-configuration-js library', () => {
       };
       const sampleConfig = await config.has('sampleConfig');
       expect(sampleConfig).toBe(false);
-    })
+    });
+
+    it('should check config from dynamoDB (single config)', async () => {
+      spyOn(config.dynamo, 'get').and.callFake((params: AWS.DynamoDB.DocumentClient.GetItemInput) => {
+        expect(params.TableName).toBe('lambda-configurations');
+        expect(params.Key).toEqual(jasmine.objectContaining({ configName: 'settings' }));
+        expect(params.ProjectionExpression).toBe('#path0.#path1');
+        expect(params.ExpressionAttributeNames).toEqual(<any> jasmine.objectContaining({
+          '#path0': 'data',
+          '#path1': 'key1'
+        }));
+        return { promise: () => Promise.resolve({ Item: undefined }) };
+      });
+
+      const result = await config.hasDirect('key1');
+      expect(result).toBe(false);
+    });
+
+    it('should check config from dynamoDB (document)', async () => {
+      spyOn(config.dynamo, 'get').and.callFake((params: AWS.DynamoDB.DocumentClient.GetItemInput) => {
+        expect(params.TableName).toBe('lambda-configurations');
+        expect(params.Key).toEqual(jasmine.objectContaining({ configName: 'settings' }));
+        expect(params.ProjectionExpression).toBe('configName');
+        const result = { configName: 'settings' };
+        return { promise: () => Promise.resolve({ Item: result }) };
+      });
+
+      const result = await config.hasDirect();
+      expect(result).toBe(true);
+    });
   });
 
   describe('set config', async () => {

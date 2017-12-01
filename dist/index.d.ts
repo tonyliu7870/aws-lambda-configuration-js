@@ -113,7 +113,7 @@ export default class  {
      *       "something": ["else", true, 1234]
      *     }
      */
-    getDirect<T>(key?: string, options?: Partial<Options>): Promise<T | undefined>;
+    getDirect<T>(key?: string | string[], options?: Partial<Options>): Promise<T | undefined>;
     /**
      * @api has(key,options) has
      * @apiName has-config
@@ -138,7 +138,9 @@ export default class  {
      * @apiSuccess {boolean} . Does the configuration contains the document / the document contains the path
      */
     has(key?: string, options?: Partial<Options>): Promise<boolean>;
+    hasDirect(key?: string | string[], options?: Partial<Options>): Promise<boolean>;
     hasDocument(options?: Partial<Options>): Promise<boolean>;
+    hasDocumentDirect(documentName?: string, options?: Partial<Options>): Promise<boolean>;
     /**
      * @api set(data,key,options) set
      * @apiName set-config
@@ -169,6 +171,7 @@ export default class  {
      *     await config1.set(data, undefined, { documentName: 'my2ndConfiguration' });
      */
     set(data: any, key?: string, options?: Partial<Options>): Promise<void>;
+    setDirect(data: any, key?: string, options?: Partial<Options>): Promise<void>;
     /**
      * @api delete(key,options) delete
      * @apiName delete-config
@@ -190,6 +193,7 @@ export default class  {
      *     await config1.delete('version');
      */
     delete(key: string, options?: Partial<Options>): Promise<void>;
+    deleteDirect(key: string, options?: Partial<Options>): Promise<void>;
     /**
      * @api deleteDocument(documentName,options) deleteDocument
      * @apiName delete-whole-config
@@ -210,6 +214,7 @@ export default class  {
      *     await config1.deleteDocument('version');
      */
     deleteDocument(documentName: string, options?: Partial<Options>): Promise<void>;
+    deleteDocumentDirect(documentName: string, options?: Partial<Options>): Promise<void>;
     /**
      * @api encrypt(data,cmk) encrypt
      * @apiName encrypt-config
