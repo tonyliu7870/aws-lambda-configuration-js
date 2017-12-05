@@ -7,10 +7,16 @@ class DocumentNotFound extends Error {
     }
 }
 exports.DocumentNotFound = DocumentNotFound;
+var Mode;
+(function (Mode) {
+    Mode["Direct"] = "direct";
+    Mode["Core"] = "core";
+    Mode["Cache"] = "cache";
+})(Mode = exports.Mode || (exports.Mode = {}));
 var UpdateType;
 (function (UpdateType) {
-    UpdateType["get"] = "GET";
-    UpdateType["put"] = "PUT";
-    UpdateType["delete"] = "DELETE";
-    UpdateType["check"] = "CHECK";
+    UpdateType["Get"] = "GET";
+    UpdateType["Put"] = "PUT";
+    UpdateType["Delete"] = "DELETE";
+    UpdateType["Check"] = "CHECK";
 })(UpdateType = exports.UpdateType || (exports.UpdateType = {}));
