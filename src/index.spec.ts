@@ -370,7 +370,6 @@ describe('aws-lambda-configuration-js library', () => {
 
       const secret = { password: '123', valid: true, second_password: 456 };
       const cipher = await config.encryptKEK(secret);
-      console.log(cipher);
       const recover = await config.decryptKEK(cipher);
       expect(recover).toEqual(jasmine.objectContaining(secret));
     });
