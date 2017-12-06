@@ -50,6 +50,8 @@ export default class {
   }
 
   // ===================== Get Config =====================
+  async get<T> (options?: Partial<Options>): Promise<T | undefined>;
+  async get<T> (key?: string | string[], options?: Partial<Options>): Promise<T | undefined>;
   /**
    * @api get<T>(key,options) get
    * @apiName get-config
@@ -99,7 +101,7 @@ export default class {
    *       }
    *     }
    */
-  async get<T> (key?: string | string[], options: Partial<Options> = {}): Promise<T | undefined> {
+  async get<T> (key?: string | string[] | Partial<Options>, options: Partial<Options> = {}): Promise<T | undefined> {
     // parameter shifting
     if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
       options = key;
@@ -107,9 +109,9 @@ export default class {
     }
 
     if (options.mode === Mode.Direct) {
-      return this.getDirect<T>(key, options);
+      return this.getDirect<T>(key as string, options);
     }
-    return this.getByCore<T>(key, options);
+    return this.getByCore<T>(key as string, options);
   }
 
   /**
@@ -160,6 +162,8 @@ export default class {
     return _get(response.Item, paths.map(path => path.replace(/\[\d+\]/g, '[0]'))) as T;
   }
 
+  async has (options?: Partial<Options>): Promise<boolean>;
+  async has (key?: string | string[], options?: Partial<Options>): Promise<boolean>;
   /**
    * @api has(key,options) has
    * @apiName has-config
@@ -184,7 +188,7 @@ export default class {
    *
    * @apiSuccess {boolean} . Does the configuration contains the document / the document contains the path
    */
-  async has (key?: string | string[], options: Partial<Options> = {}): Promise<boolean> {
+  async has (key?: string | string[] | Partial<Options>, options: Partial<Options> = {}): Promise<boolean> {
     // parameter shifting
     if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
       options = key;
@@ -192,9 +196,9 @@ export default class {
     }
 
     if (options.mode === Mode.Direct) {
-      return this.hasDirect(key, options);
+      return this.hasDirect(key as string, options);
     }
-    return this.hasByCore(key, options);
+    return this.hasByCore(key as string, options);
   }
 
   /**
@@ -208,6 +212,7 @@ export default class {
         tableName: options.tableName || this.tableName,
         documentName: options.documentName || this.documentName,
         key,
+        noCache: (options.mode === Mode.Core)
       }),
     }).promise();
     return JSON.parse(<string> response.Payload) as boolean;
@@ -237,11 +242,11 @@ export default class {
    * @apiDescription Alias function for check if the configuration document exists. It do the same as has(undefined, options).
    */
   async hasDocument (options: Partial<Options> = {}): Promise<boolean> {
-    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
-      // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
-      return this.hasByCore(undefined, options);
+    if (options.mode === Mode.Direct) {
+      return this.hasDocumentDirect(options);
     }
-    return this.hasDocumentDirect(options);
+    // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
+    return this.hasByCore(undefined, options);
   }
 
   /**
@@ -258,6 +263,8 @@ export default class {
   }
 
   // ===================== Set Config =====================
+  async set (data: any, options?: Partial<Options>): Promise<void>;
+  async set (data: any, key: string | string[], options?: Partial<Options>): Promise<void>;
   /**
    * @api set(data,key,options) set
    * @apiName set-config
@@ -288,7 +295,7 @@ export default class {
    *     const data: ConfigModel = { a: 'b', c: 1, d: true, f: ['i', 'jk'] };
    *     await config1.set(data, { documentName: 'my2ndConfiguration' });
    */
-  async set (data: any, key?: string | string[], options: Partial<Options> = {}): Promise<void> {
+  async set (data: any, key?: string | string[] | Partial<Options>, options: Partial<Options> = {}): Promise<void> {
     // parameter shifting
     if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
       options = key;
@@ -296,9 +303,9 @@ export default class {
     }
 
     if (options.mode === Mode.Core || options.mode === Mode.Cache) {
-      return this.setByCore(data, key, options);
+      return this.setByCore(data, key as string, options);
     }
-    return this.setDirect(data, key, options);
+    return this.setDirect(data, key as string, options);
   }
 
   /**
@@ -474,23 +481,23 @@ export default class {
    * @apiName encrypt-config
    * @apiVersion 1.1.0
    * @apiGroup En/Decryption
-   * @apiDescription Encrypt the data directly though AWS KMS. This function should only be used to encrypt data itself is random, e.g. access token, access secret, etc. If you want to encrypt more predict able data, e.g. user password. Use encryptKEK instead.
+   * @apiDescription Encrypt the data directly though AWS KMS. This function should only be used to encrypt data itself is random, e.g. access token, access secret, etc. If you want to encrypt more predictable data, e.g. user password. Use encryptKEK instead.
    *
    * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
    * @apiParam {String} [cmk=alias/lambda-configuration-key] The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
    * @apiParamExample {js} encrypt-data(js/promise)
    *     config1.encrypt({ jwtToken: 'abcde12345' }).then((cipher) => {
-   *       console.log(cipher);  // Buffer<00 02 ff ....>
+   *       console.log(cipher);  // "ABase64String"
    *     });
    * @apiParamExample {js} encrypt-data(ts/async-await)
    *     const cipher = await config1.encrypt({ jwtToken: 'abcde12345' });
-   *     console.log(cipher);  // Buffer<00 02 ff ....>
+   *     console.log(cipher);  // "ABase64String"
    *
-   * @apiSuccess {Buffer} . A buffer contains the encrypted data.
-   * @apiSuccessExample {Buffer}
-   *     Buffer <00 01 02 03 04 05 06 ...>
+   * @apiSuccess {String} . A buffer contains the encrypted data.
+   * @apiSuccessExample {String}
+   *     "ABase64String"
    */
-  async encrypt (data: any, cmk: string = this.cmk): Promise<String> {
+  async encrypt (data: any, cmk: string = this.cmk): Promise<string> {
     const response = await this.kms.encrypt({
       KeyId: cmk,
       Plaintext: JSON.stringify(data),
@@ -506,13 +513,13 @@ export default class {
   }
 
   /**
-   * @api decrypt(data) decrypt
+   * @api decrypt<T>(data) decrypt
    * @apiName decrypt-config
    * @apiVersion 1.1.0
    * @apiGroup En/Decryption
    * @apiDescription Decrypt the data directly though AWS KMS
    *
-   * @apiParam {Buffer} data The encrypted cipher generated by encrypt()
+   * @apiParam {String} data The encrypted cipher generated by encrypt()
    * @apiParamExample {js} decrypt(js/promise)
    *     config1.get().then(myConfig => {
    *       return config1.decrypt(myConfig.jwtToken);
@@ -521,10 +528,10 @@ export default class {
    *     });
    * @apiParamExample {js} decrypt(ts/async-await)
    *     const myConfig = await config1.get();
-   *     const jwtToken = config1.decrypt(myConfig.jwtToken);
+   *     const jwtToken = config1.decrypt<string>(myConfig.jwtToken);
    *     console.log(jwtToken);  // "abcde12345"
    *
-   * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encrypt()
+   * @apiSuccess {Any} . The data you encrypted, in exactly same format of what you pass into encrypt()
    */
   async decrypt<T> (data: string): Promise<T> {
     const response = await this.kms.decrypt({ CiphertextBlob: new Buffer(data, 'base64') }).promise();
@@ -543,13 +550,13 @@ export default class {
    * @apiParamExample {js} encryptKEK(js/promise)
    *     config1.encryptKEK({ password: '123456', second_password: 'qwerty' })
    *       .then(result => {
-   *         console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *         console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *         return config1.set(result, 'password_group', { documentName: 'user001' });
    *       })
    *       .then(() => console.log('change password success'));
    * @apiParamExample {js} encryptKEK(ts/async-promise)
    *     const result = await config1.encryptKEK({ password: '123456', second_password: 'qwerty' });
-   *     console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *     console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *     await config1.set(result, 'password_group', { documentName: 'user001' });
    *     console.log('change password success');
    *
@@ -557,8 +564,8 @@ export default class {
    * @apiSuccess {Buffer} encryptedKey A buffer contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
    * @apiSuccessExample {json}
    *     {
-   *       "cipher": Buffer<XX XX XX ...>,
-   *       "encryptedKey": Buffer<YY YY YY ...>
+   *       "cipher": "ABase64String",
+   *       "encryptedKey": "ABase64String"
    *     }
    */
   async encryptKEK (data: any, cmk: string = this.cmk): Promise<KEKCipher> {
@@ -593,27 +600,29 @@ export default class {
   }
 
   /**
-   * @api decryptKEK(data) decryptKEK
+   * @api decryptKEK<T>(data) decryptKEK
    * @apiName decrypt-KEK-data
    * @apiVersion 1.1.0
    * @apiGroup En/Decryption
    * @apiDescription Decrypt the data by Key-encryption-key (KEK). This function will decrypt your data by your data key which is encrypted by your AWS cmk.
    *
-   * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
+   * @apiParam {KEKCiper} data The data to be decrypted
+   * @apiParam {String} data.cipher A base 64 encoded cipher of encrypted data
+   * @apiParam {String} data.encryptedKey A base 64 encoded of key-encrypted-key
    * @apiParamExample {json} decryptKEK(js/promise)
    *     config1.get('password_group', { documentName: 'user001' })
    *       .then(result => {
-   *         console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *         console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *         return config1.decryptKEK(result);
    *       })
    *       .then(passwordGroup => console.log(passwordGroup));  // { password: '123456', second_password: 'qwerty' }
    * @apiParamExample {json} decryptKEK(ts/async-promise)
    *     const result = await config1.get<KEKCipher>('password_group', { documentName: 'user001' });
-   *     console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *     console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *     const passwordGroup = await config1.decryptKEK({ password: '123456', second_password: 'qwerty' });
    *     console.log(passwordGroup);  // { password: '123456', second_password: 'qwerty' }
    *
-   * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
+   * @apiSuccess {Any} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
    */
   async decryptKEK<T> (data: KEKCipher): Promise<T> {
     let dataKey = (await this.kms.decrypt({ CiphertextBlob: new Buffer(data.encryptedKey, 'base64') }).promise()).Plaintext as Buffer;

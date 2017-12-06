@@ -36,7 +36,9 @@ export type GetConfigurationRequestParam = ConfigurationRequestParam & {
   noCache: boolean;
 }
 
-export type CheckConfigurationRequestParam = ConfigurationRequestParam & {}
+export type CheckConfigurationRequestParam = ConfigurationRequestParam & {
+  noCache: boolean;
+}
 
 export type SetConfigurationRequestParam = ConfigurationRequestParam & {
   data: any;
