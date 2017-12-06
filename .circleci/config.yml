@@ -1,0 +1,109 @@
+version: 2
+default: &default
+  working_directory: ~/{{CIRCLE_PROJECT_REPONAME}}
+  docker:
+    - image: circleci/node:6.10.3
+
+jobs:
+  build:
+    <<: *default
+    steps:
+      - checkout
+      - restore_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+      - run:
+          name: Install packages
+          command: yarn
+      - save_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+          paths:
+            - node_modules
+      - run:
+          name: Build Project
+          command: yarn build
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - node_modules
+            - dist
+
+  test:
+    <<: *default
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Unit test & coverage test
+          command: yarn test
+      - store_artifacts:
+          path: coverage
+          prefix: coverage
+
+  generate-doc:
+    <<: *default
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ./
+      - add_ssh_keys:
+          fingerprints:
+            - "a1:5e:83:36:89:42:70:a2:d4:17:f0:48:0a:5a:84:23"
+      - run:
+          name: Update github
+          command: |
+            git checkout master
+            yarn doc
+            git add -f docs/*
+            git commit -m "[skip ci] generated documents from circleCI for commit: ${CIRCLE_SHA1}"
+            git push origin HEAD:master
+
+  publish:
+    <<: *default
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Deploy to stage environment
+          command: |
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+            npm publish
+
+workflows:
+  version: 2
+  build-test-deploy-doc:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only: /^v[0-9]+(\.[0-9]+)*$/
+      - test:
+          requires:
+            - build
+          filters:
+            branches:
+              only: /^v[0-9]+(\.[0-9]+)*$/
+      - generate-doc:
+          requires:
+            - deploy-stage
+          filters:
+            branches:
+              only: master
+      - approval-for-publish:
+          type: approval
+          requires:
+            - test
+          filters:
+            tags:
+              only: /^v[0-9]+(\.[0-9]+)*$/
+            branches:
+              ignore: /.*/
+      - publish:
+          requires:
+            - approval-for-publish
+          filters:
+            tags:
+              only: /^v[0-9]+(\.[0-9]+)*$/
+            branches:
+              ignore: /.*/

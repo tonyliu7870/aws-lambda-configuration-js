@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/tonyliu7870/aws-lambda-configuration-js.svg?style=svg)](https://circleci.com/gh/tonyliu7870/aws-lambda-configuration-js)  
+
 [aws-lambda-configuration front page](https://github.com/tonyliu7870/aws-lambda-configuration)    
   
 ## Pre-requirement  
