@@ -2,7 +2,7 @@ import { Lambda, KMS, config as AWSConfig, DynamoDB } from 'aws-sdk';
 // aes-js missing declaration file
 const AES = require('aes-js');
 import _get = require('lodash.get');
-import { Options, UpdateType, DocumentNotFound, GetConfigurationRequestParam, CheckConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam, KEKCipher } from './types';
+import { Options, UpdateType, DocumentNotFound, KEKCipher, Mode, GetConfigurationRequestParam, CheckConfigurationRequestParam, SetConfigurationRequestParam, DeleteConfigurationRequestParam } from './types';
 
 export default class {
   public lambda = new Lambda();
@@ -16,16 +16,16 @@ export default class {
 
   /**
    * @api constructor(options) constructor
-   * @apiName constrcutor
-   * @apiVersion 0.0.2
+   * @apiName constructor
+   * @apiVersion 2.0.0
    * @apiGroup Initialization
    * @apiDescription Initialization
    *
-   * @apiParam {Options} [options] The options to this get configuration request
-   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
-   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
-   * @apiParam {String} [options.documentName=settings] The document name to access the configurations
-   * @apiParam {String} [options.cmk] Customer Master Key (CMK). The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
+   * @apiParam {Options} [options] The options to construct library. Will override the original default settings
+   * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
+   * @apiParam {String} [options.tableName="lambda-configurations"] The DynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName="settings"] The document name to access the configurations
+   * @apiParam {String} [options.cmk="alias/lambda-configuration-key"] Customer Master Key (CMK). The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
    *
    * @apiParamExample {js} construction(js)
    *     const Config = require('aws-lambda-configuration-js').default;
@@ -38,7 +38,8 @@ export default class {
    *     const config1 = new Config({
    *       functionName: 'my-lambda',
    *       tableName: 'my-table',
-   *       documentName: 'my-configuration'
+   *       documentName: 'my-configuration',
+   *       cmk: 'alias/my-key-for-lambda'
    *     })
    */
   constructor (options: Partial<Options> = {}) {
@@ -48,99 +49,92 @@ export default class {
     if (options.cmk) this.cmk = options.cmk;
   }
 
+  // ===================== Get Config =====================
+  async get<T> (options?: Partial<Options>): Promise<T | undefined>;
+  async get<T> (key?: string | string[], options?: Partial<Options>): Promise<T | undefined>;
   /**
    * @api get<T>(key,options) get
    * @apiName get-config
-   * @apiVersion 0.0.1
+   * @apiVersion 2.0.0
    * @apiGroup Get Configuration
-   * @apiDescription Get the configuration by invoking core lambda function
+   * @apiDescription Get one specific config or the whole configuration document
    *
    * @apiParam {Type} T The type of configuration you are getting, available in typescript
-   * @apiParam {String} [key] The sub-path to your configuration. Leave undefined will get the whole configuration object
-   * @apiParam {Options} [options] The options to this get configuration request
+   * @apiParam {String} [key] The sub-path to your configuration. The library will resolve your key as object path. If the key containing a ".", you must pass an String[] to enforce your customized path traversal. Skip the parameter or leave undefined will get the whole configuration object
+   * @apiParam {object} [options] The options to this get configuration request
    * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
    * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
    * @apiParam {String} [options.documentName=settings] The document name to get the configurations
-   * @apiParam {Boolean} [options.noCache] Does the core return/save cached for the configuration
+   * @apiParam {String="direct","core","cache"} [options.mode="cache"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
    *
-   * @apiParamExample {js} get-single-config(js/promise)
+   * @apiParamExample {js} get-single-config-with-cache(js/promise)
    *     config1.get('version').then((serverVerison) => {
    *       console.log(serverVerison);
    *     });
-   * @apiParamExample {js} get-whole-config(ts/async-await)
+   * @apiParamExample {js} get-whole-config-directly(ts/async-await)
    *     type ConfigModel = {
    *       version: string;
    *       ...
    *       ...
    *       ...
    *     }
-   *     const myConfig = await config1.get<ConfigModel>();
+   *     const myConfig = await config1.get<ConfigModel>({ mode: 'direct' });
    *     console.log(myConfig.version);
+   * @apiParamExample {js} path-with-a-dot
+   *     config1.get(["subObj", "key.with.dot"]).then((result) => {
+   *       console.log(result);    // 1234
+   *     })
    *
-   * @apiSuccess {Type} . The config you stored.
+   * @apiSuccess {Type} . The configuration stored.
    * @apiSuccessExample {String} with-key
    *     "user001"
    * @apiSuccessExample {json} without-key
    *     {
    *       "userId": "user001",
    *       "password_group": {
-   *         "cipher": Buffer<XX XX XX ...>,
-   *         "encryptedKey": Buffer<YY YY YY ...>
+   *         "cipher": "abcdefghij...",    // a base64 string
+   *         "encryptedKey": "KLMNOPQ..."  // a base64 string
    *       },
-   *       "something": ["else", true, 1234]
+   *       "something": ["else", true, 1234],
+   *       "subObj": {
+   *         "key.with.dot": 1234
+   *       }
    *     }
    */
-  async get<T> (key?: string, options: Partial<Options> = {}): Promise<T> {
+  async get<T> (key?: string | string[] | Partial<Options>, options: Partial<Options> = {}): Promise<T | undefined> {
+    // parameter shifting
+    if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
+      options = key;
+      key = undefined;
+    }
+
+    if (options.mode === Mode.Direct) {
+      return this.getDirect<T>(key as string, options);
+    }
+    return this.getByCore<T>(key as string, options);
+  }
+
+  /**
+   * Get config though aws-lambda-configuration-core. Recommended to use get(____, { mode: 'core' }) or get(____, { mode: 'cache' })
+   */
+  private async getByCore<T> (key?: string | string[], options: Partial<Options> = {}): Promise<T | undefined> {
     const response = await this.lambda.invoke({
       FunctionName: options.functionName || this.functionName,
       Payload: JSON.stringify(<GetConfigurationRequestParam>{
-        type: UpdateType.get,
+        type: UpdateType.Get,
         tableName: options.tableName || this.tableName,
         documentName: options.documentName || this.documentName,
         key,
-        noCache: options.noCache,
+        noCache: (options.mode === Mode.Core),  // default to be use cache
       }),
     }).promise();
     return JSON.parse(<string> response.Payload) as T;
   }
 
   /**
-   * @api getFresh<T>(key,options) getFresh
-   * @apiName get-fresh-config
-   * @apiVersion 0.0.1
-   * @apiGroup Get Configuration
-   * @apiDescription Same as get-config but just help you set the noCache to true. Get the fresh, non-cached configuration by invoking core lambda function
-   *
-   * @apiParamExample {js} get-single-config(js/promise)
-   *     config1.getFresh('version').then(serverVerison => {
-   *       console.log(serverVerison);
-   *     });
-   * @apiParamExample {js} get-whole-config(ts/async-await)
-   *     type ConfigModel = {
-   *       version: string;
-   *       ...
-   *       ...
-   *       ...
-   *     }
-   *     const myConfig = await config1.getFresh<ConfigModel>();
-   *     console.log(myConfig.version);
-   *
-   * @apiSuccess {Type} . The config you stored.
-   * @apiSuccessExample {String} with-key
-   *     "user001"
-   * @apiSuccessExample {json} without-key
-   *     {
-   *       "userId": "user001",
-   *       "password_group": {
-   *         "cipher": Buffer<XX XX XX ...>,
-   *         "encryptedKey": Buffer<YY YY YY ...>
-   *       },
-   *       "something": ["else", true, 1234]
-   *     }
+   * Get config directly from dynamoDB. Recommended to use get(____, { mode: 'direct' })
    */
-  async getDirect<T> (key?: string | string[], options: Partial<Options> = {}): Promise<T | undefined> {
-    //return this.get<T>(key, <GetConfigurationRequestParam>{ ...options, noCache: true });
-
+  private async getDirect<T> (key?: string | string[], options: Partial<Options> = {}): Promise<T | undefined> {
     // transform key into path array
     const paths = Array.isArray(key) ? ['data', ...key] : (key === undefined) ? ['data'] : ('data.' + key).split('.');
 
@@ -168,48 +162,71 @@ export default class {
     return _get(response.Item, paths.map(path => path.replace(/\[\d+\]/g, '[0]'))) as T;
   }
 
+  async has (options?: Partial<Options>): Promise<boolean>;
+  async has (key?: string | string[], options?: Partial<Options>): Promise<boolean>;
   /**
    * @api has(key,options) has
    * @apiName has-config
-   * @apiVersion 0.0.1
+   * @apiVersion 2.0.0
    * @apiGroup Get Configuration
-   * @apiDescription Check if the configuration exists by invoking core lambda function. It is useful to save data transmission between lambdas when you only want to check if it contains a property.
+   * @apiDescription Check if the configuration exists. It is useful to reduce data transmission between lambdas & database when you only want to check if it exists.
    *
-   * @apiParam {String} [key] The sub-path to your configuration. Leave undefined will check if the document exist
-   * @apiParam {Options} [options] The options to this check configuration request
-   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
-   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
-   * @apiParam {String} [options.documentName=settings] The document name to check the configurations
+   * @apiParam {String} [key] The sub-path to your configuration. The library will resolve your key as object path. If the key containing a ".", you must pass an String[] to enforce your customized path traversal. Skip the parameter or leave undefined will check if the document exist
+   * @apiParam {object} [options] The options to this check configuration request
+   * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
+   * @apiParam {String} [options.tableName="lambda-configurations"] The DynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName="settings"] The document name to check the configurations
+   * @apiParam {String="direct","core","cache"} [options.mode="cache"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
    *
    * @apiParamExample {String} has-single-config(js/promise)
    *     config1.has('version').then((isExist) => {
    *       console.log(isExist);  // true
    *     });
    * @apiParamExample {json} has-whole-document(ts/async-await)
-   *     const isExist = await config1.has(undefined, { documentName: 'tempDocument' });
+   *     const isExist = await config1.has({ documentName: 'tempDocument' });
    *     console.log(isExist); // true
    *
    * @apiSuccess {boolean} . Does the configuration contains the document / the document contains the path
    */
-  async has (key?: string, options: Partial<Options> = {}): Promise<boolean> {
+  async has (key?: string | string[] | Partial<Options>, options: Partial<Options> = {}): Promise<boolean> {
+    // parameter shifting
+    if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
+      options = key;
+      key = undefined;
+    }
+
+    if (options.mode === Mode.Direct) {
+      return this.hasDirect(key as string, options);
+    }
+    return this.hasByCore(key as string, options);
+  }
+
+  /**
+   * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' })
+   */
+  private async hasByCore (key?: string | string[], options: Partial<Options> = {}): Promise<boolean> {
     const response = await this.lambda.invoke({
       FunctionName: options.functionName || this.functionName,
       Payload: JSON.stringify(<CheckConfigurationRequestParam>{
-        type: UpdateType.check,
+        type: UpdateType.Check,
         tableName: options.tableName || this.tableName,
         documentName: options.documentName || this.documentName,
         key,
+        noCache: (options.mode === Mode.Core)
       }),
     }).promise();
     return JSON.parse(<string> response.Payload) as boolean;
   }
 
-  async hasDirect (key?: string | string[], options: Partial<Options> = {}): Promise<boolean> {
+  /**
+   * Check existence of config directly from dynamoDB. Recommend to use has(___, { mode: 'direct' })
+   */
+  private async hasDirect (key?: string | string[], options: Partial<Options> = {}): Promise<boolean> {
     if (key === undefined) {
-      return await this.hasDocumentDirect(key, options);
+      return this.hasDocumentDirect(options);
     }
     try {
-      return (await this.getDirect(key, options) !== undefined);
+      return (await this.getDirect(key, options)) !== undefined;
     } catch (error) {
       if (error instanceof DocumentNotFound) {
         return false;
@@ -218,11 +235,24 @@ export default class {
     }
   }
 
+  /**
+   * api hasDocument(options) hasDocument
+   * @apiVersion 2.0.0
+   * @apiGroup Get Configuration
+   * @apiDescription Alias function for check if the configuration document exists. It do the same as has(undefined, options).
+   */
   async hasDocument (options: Partial<Options> = {}): Promise<boolean> {
-    return await this.has(undefined, options);
+    if (options.mode === Mode.Direct) {
+      return this.hasDocumentDirect(options);
+    }
+    // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
+    return this.hasByCore(undefined, options);
   }
 
-  async hasDocumentDirect (documentName?: string, options: Partial<Options> = {}): Promise<boolean> {
+  /**
+   * Check existence of configuration document directly from dynamoDB. Recommend to use hasDocument({ mode: 'direct' })
+   */
+  private async hasDocumentDirect (options: Partial<Options> = {}): Promise<boolean> {
     const result = await this.dynamo.get({
       TableName: options.tableName || this.tableName,
       Key: { configName: options.documentName || this.documentName },
@@ -232,19 +262,23 @@ export default class {
     return result.Item !== undefined;
   }
 
+  // ===================== Set Config =====================
+  async set (data: any, options?: Partial<Options>): Promise<void>;
+  async set (data: any, key: string | string[], options?: Partial<Options>): Promise<void>;
   /**
    * @api set(data,key,options) set
    * @apiName set-config
-   * @apiVersion 0.0.1
+   * @apiVersion 2.0.0
    * @apiGroup Set Configuration
-   * @apiDescription Set the configuration/Create a new Document by invoking core lambda function
+   * @apiDescription Set the configuration/Create new document
    *
    * @apiParam {any} data The configuration to store. If key is undefined, this should be an object (unless you really want to store one config per one document). This could happen if you decided to encrypt the whole config document.
-   * @apiParam {String} [key] The sub-path to your configuration. Leave undefined will create/replace the whole configuration document
-   * @apiParam {Options} [options] The options to this set configuration request
-   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
-   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
-   * @apiParam {String} [options.documentName=settings] The document name to set the configurations
+   * @apiParam {String} [key] The sub-path to your configuration. The library will resolve your key as object path. If the key containing a ".", you must pass an String[] to enforce your customized path traversal. Skip the parameter or leave undefined will create/replace the whole configuration document
+   * @apiParam {object} [options] The options to this set configuration request
+   * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
+   * @apiParam {String} [options.tableName="lambda-configurations"] The DynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName="settings"] The document name to set the configurations
+   * @apiParam {String="direct","core"} [options.mode="direct"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core
    *
    * @apiParamExample {js} set-single-config(js/promise)
    *     const data = 'HI, This is my secret';
@@ -259,13 +293,29 @@ export default class {
    *       ...
    *     }
    *     const data: ConfigModel = { a: 'b', c: 1, d: true, f: ['i', 'jk'] };
-   *     await config1.set(data, undefined, { documentName: 'my2ndConfiguration' });
+   *     await config1.set(data, { documentName: 'my2ndConfiguration' });
    */
-  async set (data: any, key?: string, options: Partial<Options> = {}): Promise<void> {
+  async set (data: any, key?: string | string[] | Partial<Options>, options: Partial<Options> = {}): Promise<void> {
+    // parameter shifting
+    if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
+      options = key;
+      key = undefined;
+    }
+
+    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
+      return this.setByCore(data, key as string, options);
+    }
+    return this.setDirect(data, key as string, options);
+  }
+
+  /**
+   * Create/Set config though aws-lambda-configuration-core. Recommend to use set(__, __, { mode: 'core' })
+   */
+  private async setByCore (data: any, key?: string | string[], options: Partial<Options> = {}): Promise<void> {
     await this.lambda.invoke({
       FunctionName: options.functionName || this.functionName,
       Payload: JSON.stringify(<SetConfigurationRequestParam>{
-        type: UpdateType.put,
+        type: UpdateType.Put,
         tableName: options.tableName || this.tableName,
         documentName: options.documentName || this.documentName,
         key,
@@ -274,7 +324,10 @@ export default class {
     }).promise();
   }
 
-  async setDirect (data: any, key?: string, options: Partial<Options> = {}): Promise<void> {
+  /**
+   * Create/Set config directly to dynamoDB. Recommend to use set(__, __, { mode: 'direct' })
+   */
+  private async setDirect (data: any, key?: string | string[], options: Partial<Options> = {}): Promise<void> {
     const tableName = options.tableName || this.tableName;
     const documentName = options.documentName || this.documentName;
     if (key === undefined) {
@@ -285,7 +338,7 @@ export default class {
       }).promise();
     } else {
       // update partial key in existing document
-      const paths = ('data.' + key).split('.');
+      const paths = Array.isArray(key) ? ['data', ...key] : ('data.' + key).split('.');
       const updateExpression = `SET ${paths.map((subPath, index) => '#path' + index).join('.')} = :data`;
       const updateKeys: Record<string, string> = {};
       paths.forEach((subPath, index) => updateKeys['#path' + index] = subPath);
@@ -299,18 +352,21 @@ export default class {
     }
   }
 
+  // ===================== Delete Config =====================
   /**
    * @api delete(key,options) delete
    * @apiName delete-config
-   * @apiVersion 0.0.2
+   * @apiVersion 2.0.0
    * @apiGroup Delete Configuration
-   * @apiDescription Delete one specific configuration by invoking core lambda function
+   * @apiDescription Delete one specific configuration
    *
-   * @apiParam {String} key The property of your configuration. You must specify a key(path) to delete one property. If you would like to delete the whole document, use DeleteDocument
-   * @apiParam {Options} [options] The options to this get configuration request
-   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
-   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
-   * @apiParam {String} [options.documentName=settings] The document name to delete the configuration
+   * @apiParam {String} key The property of your configuration. The library will resolve your key as object path. If the key containing a ".", you must pass an String[] to enforce your customized path traversal. You must specify a key(path) to delete one property. If you would like to delete the whole document, use DeleteDocument()
+   * @apiParam {object} [options] The options to this delete configuration request
+   * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
+   * @apiParam {String} [options.tableName="lambda-configurations"] The dynamoDB table name to store all configurations
+   * @apiParam {String} [options.documentName="settings"] The document name to delete the configuration
+   * @apiParam {String="direct","core"} [options.mode="direct"] Does the library directly delete config from dynamoDB or though aws-lambda-configuration-core
+   *
    *
    * @apiParamExample {js} delete-single-config(js/promise)
    *     config1.delete('version').then(() => {
@@ -319,11 +375,28 @@ export default class {
    * @apiParamExample {js} delete-single-config(ts/async-await)
    *     await config1.delete('version');
    */
-  async delete (key: string, options: Partial<Options> = {}): Promise<void> {
+  async delete (key: string | string[], options: Partial<Options> = {}): Promise<void> {
+    // parameter shifting
+    if (Object.keys(options).length === 0 && typeof key === 'object' && !Array.isArray(key)) {
+      options = key;
+      key = undefined as any;
+    }
+    if (key === undefined) throw new Error('Delete function do not support empty key. Use deleteDocument() instead if you want to delete the whole configuration document');
+
+    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
+      return this.deleteByCore(key, options);
+    }
+    return this.deleteDirect(key, options);
+  }
+
+  /**
+   * Delete config though aws-lambda-configuration-core. Recommend to use delete(___, { mode: 'core' });
+   */
+  private async deleteByCore (key: string | string[], options: Partial<Options> = {}): Promise<void> {
     await this.lambda.invoke({
       FunctionName: options.functionName || this.functionName,
       Payload: JSON.stringify(<DeleteConfigurationRequestParam>{
-        type: UpdateType.delete,
+        type: UpdateType.Delete,
         tableName: options.tableName || this.tableName,
         documentName: options.documentName || this.documentName,
         key,
@@ -331,8 +404,11 @@ export default class {
     }).promise();
   }
 
-  async deleteDirect (key: string, options: Partial<Options> = {}): Promise<void> {
-    const paths = ('data.' + key).split('.');
+  /**
+   * Delete config directly from dynamoDB. Recommend to use delete(___, { mode: 'direct' })
+   */
+  private async deleteDirect (key: string | string[], options: Partial<Options> = {}): Promise<void> {
+    const paths = Array.isArray(key) ? ['data', ...key] : ('data.' + key).split('.');
     const updateExpression = `REMOVE ${paths.map((subPath, index) => '#path' + index).join('.')}`;
     const updateKeys: Record<string, string> = {};
     paths.forEach((subPath, index) => updateKeys['#path' + index] = subPath);
@@ -347,15 +423,16 @@ export default class {
 
   /**
    * @api deleteDocument(documentName,options) deleteDocument
-   * @apiName delete-whole-config
-   * @apiVersion 0.0.2
+   * @apiName delete-whole-configuration
+   * @apiVersion 2.0.0
    * @apiGroup Delete Configuration
-   * @apiDescription Delete the whole configuration by invoking core lambda function
+   * @apiDescription Delete the whole configuration
    *
-   * @apiParam {String} documentName The name of your configuration. You must specify the documentName, default value is not applicable here. If you would like to delete only one property, use delete
-   * @apiParam {Options} [options] The options to this get configuration request
-   * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
-   * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
+   * @apiParam {String} documentName The name of your configuration. You must specify the documentName. Default value is not applicable here. If you would like to delete only one property in a document, use delete()
+   * @apiParam {object} [options] The options to this delete configuration request
+   * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
+   * @apiParam {String} [options.tableName="lambda-configurations"] The DynamoDB table name to store all configurations
+   * @apiParam {String="direct","core"} [options.mode="direct"] Does the library directly access dynamoDB or though aws-lambda-configuration-core
    *
    * @apiParamExample {js} delete-whole-config(js/promise)
    *     config1.deleteDocument('version').then(() => {
@@ -365,45 +442,60 @@ export default class {
    *     await config1.deleteDocument('version');
    */
   async deleteDocument (documentName: string, options: Partial<Options> = {}): Promise<void> {
+    // parameter shifting
+    if (typeof documentName !== 'string') throw new Error('Delete document function do not support default document name. You must specific ');
+
+    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
+      return this.deleteDocumentByCore(documentName, options);
+    }
+    return this.deleteDocumentDirect(documentName, options);
+  }
+
+  /**
+   * Delete configuration document though aws-lambda-configuration-core. Recommend to use deleteDocument(____, { mode: 'core' })
+   */
+  private async deleteDocumentByCore (documentName: string, options: Partial<Options> = {}): Promise<void> {
     await this.lambda.invoke({
       FunctionName: options.functionName || this.functionName,
       Payload: JSON.stringify(<DeleteConfigurationRequestParam>{
-        type: UpdateType.delete,
+        type: UpdateType.Delete,
         tableName: options.tableName || this.tableName,
         documentName: documentName,
       }),
     }).promise();
   }
 
-  async deleteDocumentDirect (documentName: string, options: Partial<Options> = {}): Promise<void> {
+  /**
+   * Delete configuration document directly from dynamoDB. Recommend to use deleteDocument(____, { mode: 'direct' })
+   */
+  private async deleteDocumentDirect (documentName: string, options: Partial<Options> = {}): Promise<void> {
     await this.dynamo.delete({
       TableName: options.tableName || this.tableName,
       Key: { configName: documentName },
     }).promise();
   }
 
+  // ===================== En/Decryption =====================
   /**
    * @api encrypt(data,cmk) encrypt
    * @apiName encrypt-config
    * @apiVersion 1.1.0
    * @apiGroup En/Decryption
-   * @apiDescription Encrypt the data directly though AWS KMS. This function should only be used to encrypt data itself is random, e.g. access token, access secret, etc. If you want to encrypt more predict able data, e.g. user password. Use encryptKEK instead.
+   * @apiDescription Encrypt the data directly though AWS KMS. This function should only be used to encrypt data itself is random, e.g. access token, access secret, etc. If you want to encrypt more predictable data, e.g. user password. Use encryptKEK instead.
    *
    * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
    * @apiParam {String} [cmk=alias/lambda-configuration-key] The id/arn/alias of key in AWS KMS to encrypt to data. If a alias name is supplied, prepend a "alias/", i.e. "alias/my-key".
    * @apiParamExample {js} encrypt-data(js/promise)
    *     config1.encrypt({ jwtToken: 'abcde12345' }).then((cipher) => {
-   *       console.log(cipher);  // Buffer<00 02 ff ....>
+   *       console.log(cipher);  // "ABase64String"
    *     });
    * @apiParamExample {js} encrypt-data(ts/async-await)
    *     const cipher = await config1.encrypt({ jwtToken: 'abcde12345' });
-   *     console.log(cipher);  // Buffer<00 02 ff ....>
+   *     console.log(cipher);  // "ABase64String"
    *
-   * @apiSuccess {Buffer} . A buffer contains the encrypted data.
-   * @apiSuccessExample {Buffer}
-   *     Buffer <00 01 02 03 04 05 06 ...>
+   * @apiSuccess {String} . A base64 encoded string contains the encrypted data.
    */
-  async encrypt (data: any, cmk: string = 'alias/lambda-configuration-key'): Promise<String> {
+  async encrypt (data: any, cmk: string = this.cmk): Promise<string> {
     const response = await this.kms.encrypt({
       KeyId: cmk,
       Plaintext: JSON.stringify(data),
@@ -419,13 +511,13 @@ export default class {
   }
 
   /**
-   * @api decrypt(data) decrypt
+   * @api decrypt<T>(data) decrypt
    * @apiName decrypt-config
    * @apiVersion 1.1.0
    * @apiGroup En/Decryption
    * @apiDescription Decrypt the data directly though AWS KMS
    *
-   * @apiParam {Buffer} data The encrypted cipher generated by encrypt()
+   * @apiParam {String} data The encrypted cipher generated by encrypt()
    * @apiParamExample {js} decrypt(js/promise)
    *     config1.get().then(myConfig => {
    *       return config1.decrypt(myConfig.jwtToken);
@@ -434,10 +526,10 @@ export default class {
    *     });
    * @apiParamExample {js} decrypt(ts/async-await)
    *     const myConfig = await config1.get();
-   *     const jwtToken = config1.decrypt(myConfig.jwtToken);
+   *     const jwtToken = config1.decrypt<string>(myConfig.jwtToken);
    *     console.log(jwtToken);  // "abcde12345"
    *
-   * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encrypt()
+   * @apiSuccess {Any} . The data you encrypted, in exactly same format of what you pass into encrypt()
    */
   async decrypt<T> (data: string): Promise<T> {
     const response = await this.kms.decrypt({ CiphertextBlob: new Buffer(data, 'base64') }).promise();
@@ -456,25 +548,25 @@ export default class {
    * @apiParamExample {js} encryptKEK(js/promise)
    *     config1.encryptKEK({ password: '123456', second_password: 'qwerty' })
    *       .then(result => {
-   *         console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *         console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *         return config1.set(result, 'password_group', { documentName: 'user001' });
    *       })
    *       .then(() => console.log('change password success'));
    * @apiParamExample {js} encryptKEK(ts/async-promise)
    *     const result = await config1.encryptKEK({ password: '123456', second_password: 'qwerty' });
-   *     console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *     console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *     await config1.set(result, 'password_group', { documentName: 'user001' });
    *     console.log('change password success');
    *
-   * @apiSuccess {Buffer} cipher A buffer contains the encrypted data
-   * @apiSuccess {Buffer} encryptedKey A buffer contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
-   * @apiSuccessExample {json}
+   * @apiSuccess {String} cipher A base64 encoded string contains the encrypted data
+   * @apiSuccess {String} encryptedKey A base64 encoded string contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
+   * @apiSuccessExample {json} Cipher-object
    *     {
-   *       "cipher": Buffer<XX XX XX ...>,
-   *       "encryptedKey": Buffer<YY YY YY ...>
+   *       "cipher": "ABase64String",
+   *       "encryptedKey": "ABase64String"
    *     }
    */
-  async encryptKEK (data: any, cmk: string = 'alias/lambda-configuration-key'): Promise<KEKCipher> {
+  async encryptKEK (data: any, cmk: string = this.cmk): Promise<KEKCipher> {
     let plainTextBytesArray = AES.utils.utf8.toBytes(JSON.stringify(data));  // convert arbitrarily data type payload to BytesArray
     let dataKey = await this.kms.generateDataKey({
       KeyId: cmk,
@@ -490,7 +582,6 @@ export default class {
 
     // encrypt data
     let encryptor = new AES.ModeOfOperation.ctr([...(dataKey.Plaintext as Buffer)], new AES.Counter(0));  // convert Buffer data key to BytesArray
-    //const cipher = new Buffer(encryptor.encrypt(plainTextBytesArray));
     const cipher = AES.utils.hex.fromBytes(encryptor.encrypt(plainTextBytesArray));
     const result: KEKCipher = {
       cipher: cipher,
@@ -507,27 +598,29 @@ export default class {
   }
 
   /**
-   * @api decryptKEK(data) decryptKEK
+   * @api decryptKEK<T>(data) decryptKEK
    * @apiName decrypt-KEK-data
    * @apiVersion 1.1.0
    * @apiGroup En/Decryption
    * @apiDescription Decrypt the data by Key-encryption-key (KEK). This function will decrypt your data by your data key which is encrypted by your AWS cmk.
    *
-   * @apiParam {Any} data The data to be encrypted. The data can be in arbitrarily format, the library will do serialization for you.
-   * @apiParamExample {json} decryptKEK(js/promise)
+   * @apiParam {KEKCiper} data The data to be decrypted
+   * @apiParam {String} data.cipher A base 64 encoded cipher of encrypted data
+   * @apiParam {String} data.encryptedKey A base 64 encoded of key-encrypted-key
+   * @apiParamExample {js} decryptKEK(js/promise)
    *     config1.get('password_group', { documentName: 'user001' })
    *       .then(result => {
-   *         console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
+   *         console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
    *         return config1.decryptKEK(result);
    *       })
    *       .then(passwordGroup => console.log(passwordGroup));  // { password: '123456', second_password: 'qwerty' }
-   * @apiParamExample {json} decryptKEK(ts/async-promise)
+   * @apiParamExample {js} decryptKEK(ts/async-promise)
    *     const result = await config1.get<KEKCipher>('password_group', { documentName: 'user001' });
-   *     console.log(result);  // { cipher: Buffer<XX XX XX ...>, encryptedKey: Buffer<YY YY YY ...> }
-   *     const passwordGroup = await config1.decryptKEK({ password: '123456', second_password: 'qwerty' });
+   *     console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
+   *     const passwordGroup = await config1.decryptKEK(result);
    *     console.log(passwordGroup);  // { password: '123456', second_password: 'qwerty' }
    *
-   * @apiSuccess {Type} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
+   * @apiSuccess {Any} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
    */
   async decryptKEK<T> (data: KEKCipher): Promise<T> {
     let dataKey = (await this.kms.decrypt({ CiphertextBlob: new Buffer(data.encryptedKey, 'base64') }).promise()).Plaintext as Buffer;

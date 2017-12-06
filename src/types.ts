@@ -2,8 +2,8 @@ export type Options = {
   functionName: string;
   tableName: string;
   documentName: string;
-  noCache: boolean;
   cmk: string;
+  mode: Mode;
 }
 
 export class DocumentNotFound extends Error {
@@ -18,19 +18,27 @@ export type KEKCipher = {
   encryptedKey: string;
 }
 
+export enum Mode {
+  Direct = 'direct',
+  Core = 'core',
+  Cache = 'cache',
+}
+
 // Core functions types
 export type ConfigurationRequestParam = {
   tableName: string;
   documentName: string;
-  key?: string;
-  type: string;
+  key?: string | string[];
+  type: UpdateType;
 }
 
 export type GetConfigurationRequestParam = ConfigurationRequestParam & {
   noCache: boolean;
 }
 
-export type CheckConfigurationRequestParam = ConfigurationRequestParam & {}
+export type CheckConfigurationRequestParam = ConfigurationRequestParam & {
+  noCache: boolean;
+}
 
 export type SetConfigurationRequestParam = ConfigurationRequestParam & {
   data: any;
@@ -39,9 +47,9 @@ export type SetConfigurationRequestParam = ConfigurationRequestParam & {
 export type DeleteConfigurationRequestParam = ConfigurationRequestParam & {}
 
 export enum UpdateType {
-  get = 'GET',
-  put = 'PUT',
-  delete = 'DELETE',
-  check = 'CHECK',
+  Get = 'GET',
+  Put = 'PUT',
+  Delete = 'DELETE',
+  Check = 'CHECK',
 }
 
