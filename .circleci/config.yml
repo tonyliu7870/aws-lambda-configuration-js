@@ -52,6 +52,8 @@ jobs:
       - run:
           name: Update github
           command: |
+            git config user.name tonyliu7870
+            git config user.email gonstl7870@gmail.com
             git checkout master
             yarn doc
             git add -f docs/*
@@ -72,7 +74,7 @@ jobs:
 
 workflows:
   version: 2
-  build-test-deploy-doc:
+  build-test-doc-publish:
     jobs:
       - build:
           filters:
