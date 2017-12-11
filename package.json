@@ -1,6 +1,6 @@
 {
   "name": "aws-lambda-configuration-js",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A Javascript(Typescript) library for AWS Lambda Functions to get configurations.",
   "main": "dist/index.js",
   "author": "Tony Liu <gonstl7870@gmail.com>",
