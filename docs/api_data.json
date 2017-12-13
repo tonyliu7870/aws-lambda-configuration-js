@@ -465,20 +465,20 @@
             ],
             "optional": true,
             "field": "options.mode",
-            "defaultValue": "cache",
+            "defaultValue": "direct",
             "description": "<p>Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.</p>"
           }
         ]
       },
       "examples": [
         {
-          "title": "get-single-config-with-cache(js/promise)",
+          "title": "get-single-config-direct(js/promise)",
           "content": "config1.get('version').then((serverVerison) => {\n  console.log(serverVerison);\n});",
           "type": "js"
         },
         {
-          "title": "get-whole-config-directly(ts/async-await)",
-          "content": "type ConfigModel = {\n  version: string;\n  ...\n  ...\n  ...\n}\nconst myConfig = await config1.get<ConfigModel>({ mode: 'direct' });\nconsole.log(myConfig.version);",
+          "title": "get-whole-config-with-cache(ts/async-await)",
+          "content": "type ConfigModel = {\n  version: string;\n  ...\n  ...\n  ...\n}\nconst myConfig = await config1.get<ConfigModel>({ mode: 'cache' });\nconsole.log(myConfig.version);",
           "type": "js"
         },
         {
@@ -575,7 +575,7 @@
             ],
             "optional": true,
             "field": "options.mode",
-            "defaultValue": "cache",
+            "defaultValue": "direct",
             "description": "<p>Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.</p>"
           }
         ]
