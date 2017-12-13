@@ -7,10 +7,10 @@ Deployed the core: [aws-lambda-configuration-core](https://github.com/tonyliu787
   
 ## Permission Required  
 Your lambda execution role will require the following permissions:  
-Core-related functions: (get(), has(), set({mode:'core'}), delete({mode:'core'}), deleteDocument({mode:'core'}))  
+Core-related functions: (get({mode:'core'|'cache'}), has({mode:'core'|'cache'}), set({mode:'core'}), delete({mode:'core'}), deleteDocument({mode:'core'}))  
 - `lambda:InvokeFunction`  
   
-Direct functions:  (get({mode:'direct'}, has({mode:'direct'}), set(), delete(), deleteDocument())  
+Direct functions:  (get(), has(), set(), delete(), deleteDocument())  
 - `dynamodb:GetItem`  
 - `dynamodb:PutItem`  
 - `dynamodb:UpdateItem`  

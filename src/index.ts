@@ -65,20 +65,20 @@ export default class {
    * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
    * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
    * @apiParam {String} [options.documentName=settings] The document name to get the configurations
-   * @apiParam {String="direct","core","cache"} [options.mode="cache"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
+   * @apiParam {String="direct","core","cache"} [options.mode="direct"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
    *
-   * @apiParamExample {js} get-single-config-with-cache(js/promise)
+   * @apiParamExample {js} get-single-config-direct(js/promise)
    *     config1.get('version').then((serverVerison) => {
    *       console.log(serverVerison);
    *     });
-   * @apiParamExample {js} get-whole-config-directly(ts/async-await)
+   * @apiParamExample {js} get-whole-config-with-cache(ts/async-await)
    *     type ConfigModel = {
    *       version: string;
    *       ...
    *       ...
    *       ...
    *     }
-   *     const myConfig = await config1.get<ConfigModel>({ mode: 'direct' });
+   *     const myConfig = await config1.get<ConfigModel>({ mode: 'cache' });
    *     console.log(myConfig.version);
    * @apiParamExample {js} path-with-a-dot
    *     config1.get(["subObj", "key.with.dot"]).then((result) => {
@@ -108,10 +108,10 @@ export default class {
       key = undefined;
     }
 
-    if (options.mode === Mode.Direct) {
-      return this.getDirect<T>(key as string, options);
+    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
+      return this.getByCore<T>(key as string, options);
     }
-    return this.getByCore<T>(key as string, options);
+    return this.getDirect<T>(key as string, options);
   }
 
   /**
@@ -176,7 +176,7 @@ export default class {
    * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
    * @apiParam {String} [options.tableName="lambda-configurations"] The DynamoDB table name to store all configurations
    * @apiParam {String} [options.documentName="settings"] The document name to check the configurations
-   * @apiParam {String="direct","core","cache"} [options.mode="cache"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
+   * @apiParam {String="direct","core","cache"} [options.mode="direct"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
    *
    * @apiParamExample {String} has-single-config(js/promise)
    *     config1.has('version').then((isExist) => {
@@ -195,14 +195,14 @@ export default class {
       key = undefined;
     }
 
-    if (options.mode === Mode.Direct) {
-      return this.hasDirect(key as string, options);
+    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
+      return this.hasByCore(key as string, options);
     }
-    return this.hasByCore(key as string, options);
+    return this.hasDirect(key as string, options);
   }
 
   /**
-   * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' })
+   * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' }) or has(___, { mode: 'cache' })
    */
   private async hasByCore (key?: string | string[], options: Partial<Options> = {}): Promise<boolean> {
     const response = await this.lambda.invoke({
@@ -242,11 +242,11 @@ export default class {
    * @apiDescription Alias function for check if the configuration document exists. It do the same as has(undefined, options).
    */
   async hasDocument (options: Partial<Options> = {}): Promise<boolean> {
-    if (options.mode === Mode.Direct) {
-      return this.hasDocumentDirect(options);
+    if (options.mode === Mode.Core || options.mode === Mode.Cache) {
+      // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
+      return this.hasByCore(undefined, options);
     }
-    // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
-    return this.hasByCore(undefined, options);
+    return this.hasDocumentDirect(options);
   }
 
   /**

@@ -72,20 +72,20 @@ class default_1 {
      * @apiParam {String} [options.functionName=lambda-configuration] The core configuration lambda function name
      * @apiParam {String} [options.tableName=lambda-configurations] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName=settings] The document name to get the configurations
-     * @apiParam {String="direct","core","cache"} [options.mode="cache"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
+     * @apiParam {String="direct","core","cache"} [options.mode="direct"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
      *
-     * @apiParamExample {js} get-single-config-with-cache(js/promise)
+     * @apiParamExample {js} get-single-config-direct(js/promise)
      *     config1.get('version').then((serverVerison) => {
      *       console.log(serverVerison);
      *     });
-     * @apiParamExample {js} get-whole-config-directly(ts/async-await)
+     * @apiParamExample {js} get-whole-config-with-cache(ts/async-await)
      *     type ConfigModel = {
      *       version: string;
      *       ...
      *       ...
      *       ...
      *     }
-     *     const myConfig = await config1.get<ConfigModel>({ mode: 'direct' });
+     *     const myConfig = await config1.get<ConfigModel>({ mode: 'cache' });
      *     console.log(myConfig.version);
      * @apiParamExample {js} path-with-a-dot
      *     config1.get(["subObj", "key.with.dot"]).then((result) => {
@@ -115,10 +115,10 @@ class default_1 {
                 options = key;
                 key = undefined;
             }
-            if (options.mode === types_1.Mode.Direct) {
-                return this.getDirect(key, options);
+            if (options.mode === types_1.Mode.Core || options.mode === types_1.Mode.Cache) {
+                return this.getByCore(key, options);
             }
-            return this.getByCore(key, options);
+            return this.getDirect(key, options);
         });
     }
     /**
@@ -180,7 +180,7 @@ class default_1 {
      * @apiParam {String} [options.functionName="lambda-configuration"] The core configuration lambda function name
      * @apiParam {String} [options.tableName="lambda-configurations"] The DynamoDB table name to store all configurations
      * @apiParam {String} [options.documentName="settings"] The document name to check the configurations
-     * @apiParam {String="direct","core","cache"} [options.mode="cache"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
+     * @apiParam {String="direct","core","cache"} [options.mode="direct"] Does the library directly access the dynamoDB or invoke aws-lambda-configuration-core.
      *
      * @apiParamExample {String} has-single-config(js/promise)
      *     config1.has('version').then((isExist) => {
@@ -199,14 +199,14 @@ class default_1 {
                 options = key;
                 key = undefined;
             }
-            if (options.mode === types_1.Mode.Direct) {
-                return this.hasDirect(key, options);
+            if (options.mode === types_1.Mode.Core || options.mode === types_1.Mode.Cache) {
+                return this.hasByCore(key, options);
             }
-            return this.hasByCore(key, options);
+            return this.hasDirect(key, options);
         });
     }
     /**
-     * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' })
+     * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' }) or has(___, { mode: 'cache' })
      */
     hasByCore(key, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -250,11 +250,11 @@ class default_1 {
      */
     hasDocument(options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (options.mode === types_1.Mode.Direct) {
-                return this.hasDocumentDirect(options);
+            if (options.mode === types_1.Mode.Core || options.mode === types_1.Mode.Cache) {
+                // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
+                return this.hasByCore(undefined, options);
             }
-            // aws-lambda-configuration-core use the same function for checking existence of config and configuration document
-            return this.hasByCore(undefined, options);
+            return this.hasDocumentDirect(options);
         });
     }
     /**
@@ -506,9 +506,7 @@ class default_1 {
      *     const cipher = await config1.encrypt({ jwtToken: 'abcde12345' });
      *     console.log(cipher);  // "ABase64String"
      *
-     * @apiSuccess {String} . A buffer contains the encrypted data.
-     * @apiSuccessExample {String}
-     *     "ABase64String"
+     * @apiSuccess {String} . A base64 encoded string contains the encrypted data.
      */
     encrypt(data, cmk = this.cmk) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -575,9 +573,9 @@ class default_1 {
      *     await config1.set(result, 'password_group', { documentName: 'user001' });
      *     console.log('change password success');
      *
-     * @apiSuccess {Buffer} cipher A buffer contains the encrypted data
-     * @apiSuccess {Buffer} encryptedKey A buffer contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
-     * @apiSuccessExample {json}
+     * @apiSuccess {String} cipher A base64 encoded string contains the encrypted data
+     * @apiSuccess {String} encryptedKey A base64 encoded string contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
+     * @apiSuccessExample {json} Cipher-object
      *     {
      *       "cipher": "ABase64String",
      *       "encryptedKey": "ABase64String"
@@ -626,17 +624,17 @@ class default_1 {
      * @apiParam {KEKCiper} data The data to be decrypted
      * @apiParam {String} data.cipher A base 64 encoded cipher of encrypted data
      * @apiParam {String} data.encryptedKey A base 64 encoded of key-encrypted-key
-     * @apiParamExample {json} decryptKEK(js/promise)
+     * @apiParamExample {js} decryptKEK(js/promise)
      *     config1.get('password_group', { documentName: 'user001' })
      *       .then(result => {
      *         console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
      *         return config1.decryptKEK(result);
      *       })
      *       .then(passwordGroup => console.log(passwordGroup));  // { password: '123456', second_password: 'qwerty' }
-     * @apiParamExample {json} decryptKEK(ts/async-promise)
+     * @apiParamExample {js} decryptKEK(ts/async-promise)
      *     const result = await config1.get<KEKCipher>('password_group', { documentName: 'user001' });
      *     console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
-     *     const passwordGroup = await config1.decryptKEK({ password: '123456', second_password: 'qwerty' });
+     *     const passwordGroup = await config1.decryptKEK(result);
      *     console.log(passwordGroup);  // { password: '123456', second_password: 'qwerty' }
      *
      * @apiSuccess {Any} . The data you encrypted, in exactly same format of what you pass into encryptKEK()
