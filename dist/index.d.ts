@@ -50,7 +50,7 @@ export default class  {
     has(options?: Partial<Options>): Promise<boolean>;
     has(key?: string | string[], options?: Partial<Options>): Promise<boolean>;
     /**
-     * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' })
+     * Check existence of config though aws-lambda-configuration-core. Recommended to use has(___, { mode: 'core' }) or has(___, { mode: 'cache' })
      */
     private hasByCore(key?, options?);
     /**
@@ -155,11 +155,9 @@ export default class  {
      *     const cipher = await config1.encrypt({ jwtToken: 'abcde12345' });
      *     console.log(cipher);  // "ABase64String"
      *
-     * @apiSuccess {String} . A buffer contains the encrypted data.
-     * @apiSuccessExample {String}
-     *     "ABase64String"
+     * @apiSuccess {String} . A base64 encoded string contains the encrypted data.
      */
-    encrypt(data: any, cmk?: string): Promise<String>;
+    encrypt(data: any, cmk?: string): Promise<string>;
     /**
      * @api decrypt<T>(data) decrypt
      * @apiName decrypt-config
@@ -204,9 +202,9 @@ export default class  {
      *     await config1.set(result, 'password_group', { documentName: 'user001' });
      *     console.log('change password success');
      *
-     * @apiSuccess {Buffer} cipher A buffer contains the encrypted data
-     * @apiSuccess {Buffer} encryptedKey A buffer contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
-     * @apiSuccessExample {json}
+     * @apiSuccess {String} cipher A base64 encoded string contains the encrypted data
+     * @apiSuccess {String} encryptedKey A base64 encoded string contains the data key used to encrypt the data. This key is encrypted by your AWS cmk.
+     * @apiSuccessExample {json} Cipher-object
      *     {
      *       "cipher": "ABase64String",
      *       "encryptedKey": "ABase64String"
@@ -223,17 +221,17 @@ export default class  {
      * @apiParam {KEKCiper} data The data to be decrypted
      * @apiParam {String} data.cipher A base 64 encoded cipher of encrypted data
      * @apiParam {String} data.encryptedKey A base 64 encoded of key-encrypted-key
-     * @apiParamExample {json} decryptKEK(js/promise)
+     * @apiParamExample {js} decryptKEK(js/promise)
      *     config1.get('password_group', { documentName: 'user001' })
      *       .then(result => {
      *         console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
      *         return config1.decryptKEK(result);
      *       })
      *       .then(passwordGroup => console.log(passwordGroup));  // { password: '123456', second_password: 'qwerty' }
-     * @apiParamExample {json} decryptKEK(ts/async-promise)
+     * @apiParamExample {js} decryptKEK(ts/async-promise)
      *     const result = await config1.get<KEKCipher>('password_group', { documentName: 'user001' });
      *     console.log(result);  // { cipher: "ABase64String", encryptedKey: "ABase64String" }
-     *     const passwordGroup = await config1.decryptKEK({ password: '123456', second_password: 'qwerty' });
+     *     const passwordGroup = await config1.decryptKEK(result);
      *     console.log(passwordGroup);  // { password: '123456', second_password: 'qwerty' }
      *
      * @apiSuccess {Any} . The data you encrypted, in exactly same format of what you pass into encryptKEK()

@@ -57,7 +57,7 @@ describe('aws-lambda-configuration-js library', () => {
           return { promise: () => Promise.resolve({ StatusCode: 200, Payload: JSON.stringify(result) }) };
         }
       };
-      const sampleConfig = await config.get<string>('sampleConfig');
+      const sampleConfig = await config.get<string>('sampleConfig', { mode: Mode.Cache });
       expect(sampleConfig).toBe('sampleValue');
     });
 
@@ -68,7 +68,7 @@ describe('aws-lambda-configuration-js library', () => {
           const payload: GetConfigurationRequestParam = JSON.parse(<string> params.Payload);
           expect(payload.tableName).toBe('tableA');
           expect(payload.documentName).toBe('documentA');
-          expect(payload.key).toBe('sampleConfigA')
+          expect(payload.key).toBe('sampleConfigA');
           expect(payload.noCache).toBe(true);
           expect(payload.type).toBe('GET');
           const result = <SampleConfig> { key1: 'a', key2: true, key3: 123 };
@@ -211,8 +211,8 @@ describe('aws-lambda-configuration-js library', () => {
 
     it('should redirect function to hasByCore()', async () => {
       spyOn(config as any, 'hasByCore');
-      const result = await config.hasDocument();
-      expect((config as any).hasByCore).toHaveBeenCalledWith(undefined, {});
+      const result = await config.hasDocument({ mode: Mode.Core });
+      expect((config as any).hasByCore).toHaveBeenCalledWith(undefined, jasmine.objectContaining({ mode: Mode.Core }));
     });
   });
 
